@@ -24,7 +24,8 @@ python app.py
 
 # TODOs
 * Add Tiling around world borders / seemless transitions
-* Add Airports / Landing Functionality
+* Add config files
+* Add Package Drop Of functionality
 * Add Missions
 * Add Airplane Shadow
 * Add other airplanes

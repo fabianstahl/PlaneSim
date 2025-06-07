@@ -1,6 +1,9 @@
 import sys
 import numpy as np
 import glm
+import configparser as cfg
+import utils
+
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtGui import QSurfaceFormat
@@ -16,30 +19,44 @@ from engine.frustum import Frustum
 
 class GLWidget(QOpenGLWidget):
 
-    def __init__(self):
+    def __init__(self, configs):
         super().__init__()
 
+        self.configs        = configs
+
         self.shader_program = None
-        self.cam            = Camera(aspect = 640 / 480)
+
+        self.cam            = Camera(
+                    position    = glm.vec3(utils.parse_list(configs["cam_position"], float)),
+                    target      = glm.vec3(utils.parse_list(configs["cam_target"], float)),
+                    up          = glm.vec3(utils.parse_list(configs["cam_up"], float)),
+                    fov_degrees = configs.getfloat("cam_fov"), 
+                    aspect      = configs.getint("window_width") / configs.getint("window_height"), 
+                    near        = configs.getfloat("cam_near"), 
+                    far         = configs.getfloat("cam_far")
+        )
+        
         self.frustum        = Frustum()
         self.tile_cache     = {}
 
-        self.plane = Plane(
-            position            = glm.vec3(0.0, 0.0, 0.001),
-            scale               = 0.001,
-            texture_path        = "assets/plane.png"
+        self.plane          = Plane(
+            position            = glm.vec3(utils.parse_list(configs["plane_position"], float)),
+            scale               = configs.getfloat("plane_scale"),
+            texture_path        = configs.get("plane_tex_path")
         )
 
-        self.render_mode    = 2
+        # 0: points, 1: wireframe, 2: textured
+        self.render_mode    = 2     
 
+        # App Timer
         self.timer          = QTimer(self)
-        self.timer.timeout.connect(self.update_plane)
-        self.timer.start(32)  # ~30 FPS
+        self.timer.timeout.connect(self.update_game)
+        self.timer.start(1000 // configs.getint("app_fps"))
         self.elapsed_timer  = QElapsedTimer()
-        self.elapsed_timer.start()  # Start the timer
+        self.elapsed_timer.start()
 
 
-    def update_plane(self):
+    def update_game(self):
 
         ms = self.elapsed_timer.elapsed()
         self.elapsed_timer.restart()
@@ -47,19 +64,20 @@ class GLWidget(QOpenGLWidget):
         delta = ms / 1000.0  # Convert to seconds
         self.plane.update(delta)
 
-        new_pos = glm.vec3(self.plane.position.x, self.plane.position.y, 0)
-        self.cam.focus(new_pos)
+        new_focus_point = glm.vec3(self.plane.position.x, self.plane.position.y, 0)
+        self.cam.focus(new_focus_point)
 
         self.update()
 
 
     def initializeGL(self):
-        glClearColor(0.1, 0.1, 0.1, 1.0)
+        bg_color = utils.parse_list(self.configs["clear_color"], float)
+        glClearColor(*bg_color)
         glClearDepth(1.0)
         glEnable(GL_CULL_FACE)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glPointSize(5.0)
+        glPointSize(configs.getfloat("point_size"))
 
         self.plane.initializeGL()
             
@@ -117,6 +135,7 @@ class GLWidget(QOpenGLWidget):
                 self.tile_cache[key].release
                 self.tile_cache.pop(key)
 
+
         # Render tiles
         for tile in self.tile_cache.values():
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(tile.model_matrix, dtype=np.float32).T)
@@ -130,6 +149,13 @@ class GLWidget(QOpenGLWidget):
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
         self.cam.set_aspect(w/h)
+
+
+    def release(self):
+        self.plane.release()
+        for tile in self.tile_cache.values():
+            tile.release()
+        self.program.release()
 
 
     def delegate_key_pressed(self, event):
@@ -158,7 +184,7 @@ class GLWidget(QOpenGLWidget):
         elif key == Qt.Key.Key_D:
             self.cam.translate(glm.vec3(0.1, 0, 0))
         """
-        #self.update()
+
 
 
     def delegate_wheel_event(self, event):
@@ -169,7 +195,6 @@ class GLWidget(QOpenGLWidget):
         # Move camera along its forward direction
         self.cam.zoom(delta * zoom_speed)
 
-        self.update()
 
 
     def delegate_mouse_pressed_event(self, event):
@@ -219,7 +244,6 @@ class GLWidget(QOpenGLWidget):
         delta = p_old - p_new
 
         self.cam.move(delta)
-        self.update()
 
 
 
@@ -233,19 +257,22 @@ class GLWidget(QOpenGLWidget):
         self.cam.tilt(dy * sensitivity)
         #self.cam.orbit(dx * sensitivity)
 
-        self.update()
 
 
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, configs):
         super().__init__()
-        self.setWindowTitle("OpenGL Triangle - PyQt6")
-        self.setGeometry(100, 100, 2200, 1200)
-        self.gl_widget = GLWidget()
+
+        self.configs = configs
+
+        self.setWindowTitle("PlaneSim")
+        self.setGeometry(0, 0, configs.getint("window_width"), configs.getint("window_height"))
+        self.gl_widget = GLWidget(configs)
         self.setCentralWidget(self.gl_widget)
 
+        # Variables for user interaction
         self.last_mouse_pos     = None
         self.left_mouse_down    = False
         self.middle_mouse_down  = False
@@ -253,8 +280,8 @@ class MainWindow(QMainWindow):
 
 
     def keyPressEvent(self, event):
-
         if event.key() == Qt.Key.Key_Escape:
+            self.gl_widget.release()
             self.close()
         self.gl_widget.delegate_key_pressed(event)
 
@@ -309,7 +336,11 @@ if __name__ == "__main__":
     fmt.setDepthBufferSize(24)
     QSurfaceFormat.setDefaultFormat(fmt)
 
-    window = MainWindow()
+    parser = cfg.ConfigParser()
+    parser.read("configs.ini")
+    configs = parser["DEFAULT"]
+
+    window = MainWindow(configs)
     window.show()
 
     sys.exit(app.exec())

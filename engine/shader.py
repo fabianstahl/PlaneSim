@@ -16,12 +16,18 @@ class Shader():
             print(glGetShaderInfoLog(shader).decode())
         self.shader = shader
 
+    def release(self):
+        glDeleteShader(self.shader)
 
 
 class Program():
 
     def __init__(self, vertex_shader, fragment_shader):
-        self.shader_program = glCreateProgram()
+
+        self.vertex_shader      = vertex_shader
+        self.fragment_shader    = fragment_shader
+
+        self.shader_program     = glCreateProgram()
         glAttachShader(self.shader_program, vertex_shader.shader)
         glAttachShader(self.shader_program, fragment_shader.shader)
         glLinkProgram(self.shader_program)
@@ -31,8 +37,9 @@ class Program():
             print("Shader program linking failed:")
             print(glGetProgramInfoLog(self.shader_program).decode())
 
-        num_uniforms = glGetProgramiv(self.shader_program, GL_ACTIVE_UNIFORMS)
         """
+        # Parint uniform IDs
+        num_uniforms = glGetProgramiv(self.shader_program, GL_ACTIVE_UNIFORMS)
         print("Active uniforms:")
         for i in range(num_uniforms):
             name, size, type_ = glGetActiveUniform(self.shader_program, i)
@@ -45,3 +52,8 @@ class Program():
     def get_uniform_location(self, identifier):
         glUseProgram(self.shader_program)
         return glGetUniformLocation(self.shader_program, identifier)
+    
+    def release(self):
+        self.vertex_shader.release()
+        self.fragment_shader.release()
+        glDeleteProgram(self.shader_program)

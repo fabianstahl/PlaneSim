@@ -2,13 +2,13 @@ import glm
 
 class Camera:
     def __init__(self,
-            position    = glm.vec3(0.0, 0.0, 0.02),
-            target      = glm.vec3(0.0, 0.0, 0.0),
-            up          = glm.vec3(0.0, 1.0, 0.0),
-            fov_degrees = 40.0, 
-            aspect      = 4.0/3.0, 
-            near        = 0.001, 
-            far         = 10.0):
+            position    : glm.vec3,
+            target      : glm.vec3,
+            up          : glm.vec3,
+            fov_degrees : float,  
+            aspect      : float, 
+            near        : float, 
+            far         : float):
         
         self.position   = position
         self.target     = target
@@ -20,34 +20,39 @@ class Camera:
         self.far        = far
 
 
-    def set_aspect(self, aspect):
+
+    def set_aspect(self, aspect: float):
         self.aspect = aspect
 
 
-    def get_view_matrix(self):
+
+    def get_view_matrix(self) -> glm.mat4:
         return glm.lookAt(self.position, self.target, self.up)
 
 
-    def get_projection_matrix(self):
+
+    def get_projection_matrix(self) -> glm.mat4:
         return glm.perspective(self.fov, self.aspect, self.near, self.far)
-        #return glm.ortho(-1, 1, -1, 1, self.near, self.far)
 
 
-    def translate(self, direction: glm.vec3):
-        """Move camera in world space (e.g., for WASD movement)"""
-        self.position   += direction
-        self.target     += direction
+
+    def translate(self, translation_vector: glm.vec3):
+        """Translate camera position by a vector in world space (e.g., for WASD movement)"""
+        self.position   += translation_vector
+        self.target     += translation_vector
+
 
 
     def move(self, new_pos: glm.vec3):
-        """Move camera in world space (e.g., for WASD movement)"""
+        """Set camera position in world space"""
         direction       = glm.normalize(self.target  - self.position)
         distance        = glm.length(self.target - self.position)
         self.position   = new_pos
         self.target     = new_pos + direction * distance  # keep direction and distance
 
 
-    def focus(self, new_pos: glm.vec3):
+
+    def focus(self, focus_point: glm.vec3):
         """
         Move the camera such that it continues looking from the same relative position,
         but the new pivot point becomes the specified position.
@@ -64,30 +69,20 @@ class Camera:
         current_pivot = self.position + forward * t
 
         # Compute offset to shift camera so pivot moves to new location
-        offset = new_pos - current_pivot
+        offset = focus_point - current_pivot
 
         # Move camera and target by the same amount
         self.position += offset
         self.target += offset
 
 
-    def rotate(self, axis: glm.vec3, angle_deg: float):
-        """Rotate the camera's viewing direction around a given world-space axis."""
-        direction = glm.normalize(self.target - self.position)
-        angle_rad = glm.radians(angle_deg)
 
-        rotation = glm.rotate(glm.mat4(1.0), angle_rad, axis)
-        rotated_dir = glm.vec3(rotation * glm.vec4(direction, 0.0))
+    def zoom(self, distance):
+        """Zoom camera along the forward axis by a distance"""
+        offset          = glm.normalize(self.target - self.position) * distance
+        self.position   += offset
+        self.target     += offset
 
-        self.target = self.position + rotated_dir
-        self.up = glm.vec3(rotation * glm.vec4(self.up, 0.0))  # Optional: rotate up vector too
-
-
-    def zoom(self, amount):
-        forward     = glm.normalize(self.target - self.position)
-        movement    = forward * amount
-        self.position   += movement
-        self.target     += movement
 
 
     def tilt(self, angle_radians: float):
@@ -110,6 +105,7 @@ class Camera:
         rot             = glm.rotate(glm.mat4(1), angle_radians, right)
         new_direction   = glm.vec3(rot * glm.vec4(direction, 0.0))
 
+        # TODO: see why this is sometimes buggy, make generic
         if new_direction.y < 0: 
             new_direction.y = 0
             new_direction = glm.normalize(new_direction)
@@ -124,8 +120,10 @@ class Camera:
 
 
 
-
     def orbit(self, angle_radians: float):
+        
+        # TODO: This needs fixing, buggy!
+
         # Direction camera is facing
         direction = glm.normalize(self.target - self.position)
 
