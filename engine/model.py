@@ -6,9 +6,8 @@ import numpy as np
 
 class Model:
 
-    def __init__(self, vertices, indices, position, scale, texture_path):
-        self.vertices       = vertices
-        self.indices        = indices
+    def __init__(self, vao, position, scale, texture_path):
+        self.vao            = vao
         self.position       = position
         self.scale          = scale
         self.texture_path   = texture_path
@@ -25,7 +24,6 @@ class Model:
 
 
     def initializeGL(self):
-        self.vao        = VAO(self.vertices, self.indices)
         self.texture    = Texture(self.texture_path)
 
 
@@ -40,23 +38,10 @@ class Model:
         self.texture.release()
 
 
-class Plane(Model):
-    def __init__(self, position, scale, texture_path):
+class Airplane(Model):
+    def __init__(self, vao, position, scale, texture_path):
 
-        plane_vertices = np.array([
-            # positions       # texture coords
-            [-0.5,  0.5, 0.0,  0.0, 1.0],  # top-left
-            [-0.5, -0.5, 0.0,  0.0, 0.0],  # bottom-left
-            [ 0.5, -0.5, 0.0,  1.0, 0.0],  # bottom-right
-            [ 0.5,  0.5, 0.0,  1.0, 1.0],  # top-right
-        ], dtype=np.float32)
-
-        plane_indices = np.array([
-            0, 1, 2,
-            0, 2, 3
-        ], dtype=np.uint32)
-
-        super().__init__(plane_vertices, plane_indices, position, scale, texture_path)
+        super().__init__(vao, position, scale, texture_path)
         
         self.forward        = glm.vec3(0, 1, 0)
         self.velocity       = 0
@@ -100,19 +85,6 @@ class Plane(Model):
 
 class MapTile(Model):
 
-    def __init__(self, position, scale, texture_path):
+    def __init__(self, vao, position, scale, texture_path):
 
-        plane_vertices = np.array([
-            # positions       # texture coords
-            [-0.5,  0.5, 0.0,  0.0, 1.0],  # top-left
-            [-0.5, -0.5, 0.0,  0.0, 0.0],  # bottom-left
-            [ 0.5, -0.5, 0.0,  1.0, 0.0],  # bottom-right
-            [ 0.5,  0.5, 0.0,  1.0, 1.0],  # top-right
-        ], dtype=np.float32)
-
-        plane_indices = np.array([
-            0, 1, 2,
-            0, 2, 3
-        ], dtype=np.uint32)
-
-        super().__init__(plane_vertices, plane_indices, position, scale, texture_path)
+        super().__init__(vao, position, scale, texture_path)

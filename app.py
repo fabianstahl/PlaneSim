@@ -12,8 +12,10 @@ from OpenGL.GL import *
 
 from engine.shader import Shader, Program
 from engine.camera import Camera
-from engine.model import MapTile, Plane
+from engine.model import MapTile, Airplane
 from engine.frustum import Frustum
+from engine.vao import VAO
+from engine.primitives import Plane
 
 
 
@@ -39,7 +41,11 @@ class GLWidget(QOpenGLWidget):
         self.frustum        = Frustum()
         self.tile_cache     = {}
 
-        self.plane          = Plane(
+        plane_geom          = Plane()
+        self.tile_vao       = VAO(plane_geom.vertices, plane_geom.indices)
+
+        self.air_plane          = Airplane(
+            vao                 = self.tile_vao, 
             position            = glm.vec3(utils.parse_list(configs["plane_position"], float)),
             scale               = configs.getfloat("plane_scale"),
             texture_path        = configs.get("plane_tex_path")
@@ -62,9 +68,9 @@ class GLWidget(QOpenGLWidget):
         self.elapsed_timer.restart()
 
         delta = ms / 1000.0  # Convert to seconds
-        self.plane.update(delta)
+        self.air_plane.update(delta)
 
-        new_focus_point = glm.vec3(self.plane.position.x, self.plane.position.y, 0)
+        new_focus_point = glm.vec3(self.air_plane.position.x, self.air_plane.position.y, 0)
         self.cam.focus(new_focus_point)
 
         self.update()
@@ -79,8 +85,10 @@ class GLWidget(QOpenGLWidget):
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glPointSize(configs.getfloat("point_size"))
 
-        self.plane.initializeGL()
-            
+        self.air_plane.initializeGL()
+        
+        self.tile_vao.initializeGL()
+
         self.setup_shaders()
 
         # Get uniform location
@@ -125,7 +133,7 @@ class GLWidget(QOpenGLWidget):
                 y_pos               = 2 * (y - center + 0.5) / 2**z
                 position            = glm.vec3(y_pos, x_pos, 0)
                 texture_path        = "data/tiles_esri/{}/{}/{}.png".format(z, x, y)
-                tile                = MapTile(position, scale, texture_path)
+                tile                = MapTile(self.tile_vao, position, scale, texture_path)
                 tile.initializeGL()
                 self.tile_cache[(x, y, z)] = tile
 
@@ -142,8 +150,8 @@ class GLWidget(QOpenGLWidget):
             tile.render()
 
         # Render plane
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.plane.model_matrix, dtype=np.float32).T)
-        self.plane.render()
+        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
+        self.air_plane.render()
 
 
     def resizeGL(self, w, h):
@@ -152,7 +160,7 @@ class GLWidget(QOpenGLWidget):
 
 
     def release(self):
-        self.plane.release()
+        self.air_plane.release()
         for tile in self.tile_cache.values():
             tile.release()
         self.program.release()
@@ -161,13 +169,13 @@ class GLWidget(QOpenGLWidget):
     def delegate_key_pressed(self, event):
         key = event.key()
         if key == Qt.Key.Key_W:
-            self.plane.accelerate(0.004)
+            self.air_plane.accelerate(0.004)
         elif key == Qt.Key.Key_S:
-            self.plane.accelerate(-0.004)
+            self.air_plane.accelerate(-0.004)
         elif key == Qt.Key.Key_A:
-            self.plane.rotate(1)
+            self.air_plane.rotate(1)
         elif key == Qt.Key.Key_D:
-            self.plane.rotate(-1)
+            self.air_plane.rotate(-1)
         elif key == Qt.Key.Key_1:
             self.render_mode = 0
         elif key == Qt.Key.Key_2:
