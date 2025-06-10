@@ -1,8 +1,17 @@
-TODO
-
-
 # PlaneSim
 PlaneSim is a geography game where you try to find international airports while navigating around storms and avoiding other aircrafts.
+
+
+| Keys | Function | 
+|---|---|
+| W, A, S, D | Move Plane |
+| Space | Shoot rocket |
+| Page_Up, Page_Down | Tilt Camera |
+| Arrow_Left, Arrow_Right | Orbit Camer |
+| Esc | Close App |
+| 1 | Render Points |
+| 2 | Render Wireframe |
+| 3 | Render Textures |
 
 ![screenshot](assets/screenshot.png)
 
@@ -26,8 +35,6 @@ python app.py
 
 # TODOs
 * Add Tiling around world borders / seemless transitions
-* Add Package Drop Of functionality
 * Add Airplane Shadow
 * Add enemy interaction
 * Add dangerous cloud crashes
-* write README
