@@ -57,6 +57,28 @@ class Target(Model):
 
 
 
+class Rocket(Model):
+
+    def __init__(self, rocket_speed, forward, life_time, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.rocket_speed   = rocket_speed
+        self.forward        = forward
+        self.life_time      = life_time
+        self.no_updates     = 0
+
+
+    def update(self):
+        self.position      += self.forward * self.rocket_speed
+        self.no_updates     += 1
+        self.model_matrix   = self.calculate_model_matrix()
+
+    
+    def is_destroyable(self):
+        return self.no_updates >= self.life_time
+
+
+
+
 class Airplane(Model):
     def __init__(self, min_vel, max_vel, *args, **kwargs):
         super().__init__(*args, **kwargs)

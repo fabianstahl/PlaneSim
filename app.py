@@ -13,7 +13,7 @@ from OpenGL.GL import *
 
 from engine.shader import Shader, Program
 from engine.camera import Camera
-from engine.model import MapTile, Airplane, Model, Target
+from engine.model import MapTile, Airplane, Model, Target, Rocket
 from engine.frustum import Frustum
 from engine.vao import VAO
 from engine.primitives import Plane, Cylinder, Cloud
@@ -45,6 +45,7 @@ class GLWidget(QOpenGLWidget):
         cylinder_geom       = Cylinder()
         self.target_vao     = VAO(cylinder_geom)
 
+        self.rockets        = []
         
         self.mission_manager    = MissionManager(configs)
         self.targets            = []
@@ -157,6 +158,11 @@ class GLWidget(QOpenGLWidget):
         for target in self.targets:
             target.update()
 
+        for rocket in self.rockets:
+            rocket.update()
+            if rocket.is_destroyable():
+                self.rockets.remove(rocket)
+
         new_focus_point = glm.vec3(self.air_plane.position.x, self.air_plane.position.y, 0)
         self.cam.focus(new_focus_point)
 
@@ -210,20 +216,22 @@ class GLWidget(QOpenGLWidget):
         self.program    = Program(vertex_shader, fragment_shader)
 
 
-    def add_target(self):
+    def shoot_rocket(self):
         
-
-        target          = Model(
-            vao                 = self.target_vao, 
-            position            = glm.vec3(self.air_plane.position[0], self.air_plane.position[1], 0.003),
+        rocket          = Rocket(
+            vao                 = self.tile_vao, 
+            position            = glm.vec3(*self.air_plane.position),
             scale               = 0.001,
-            texture_path        = self.configs.get("target_tex_path"), 
-            orbit_deg           = 0
+            texture_path        = self.configs.get("rocket_tex_path"), 
+            orbit_deg           = self.air_plane.orbit_deg, 
+            rocket_speed        = self.configs.getfloat("rocket_speed"),
+            forward             = self.air_plane.forward, 
+            life_time           = self.configs.getint("rocket_life_time")
         )
         
-        target.initializeGL()
+        rocket.initializeGL()
 
-        self.targets.append(target)
+        self.rockets.append(rocket)
 
     def paintGL(self):
 
@@ -297,6 +305,11 @@ class GLWidget(QOpenGLWidget):
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(enemy.model_matrix, dtype=np.float32).T)
             enemy.render()
 
+        # Render rockets
+        for rocket in self.rockets:
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(rocket.model_matrix, dtype=np.float32).T)
+            rocket.render()
+
         # Start QPainter after OpenGL
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -351,7 +364,7 @@ class GLWidget(QOpenGLWidget):
         elif key == Qt.Key.Key_3:
             self.render_mode = 2
         elif key == Qt.Key.Key_Space:
-            self.add_target()
+            self.shoot_rocket()
         elif key == Qt.Key.Key_PageUp:
             self.cam.tilt(-5)
         elif key == Qt.Key.Key_PageDown:
