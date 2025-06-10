@@ -2,7 +2,9 @@ TODO
 
 
 # PlaneSim
-PlaneSim is a fast-paced game where you race to deliver packages to international airports while navigating around storms and avoiding collisions with other aircraft.
+PlaneSim is a geography game where you try to find international airports while navigating around storms and avoiding other aircrafts.
+
+![screenshot](assets/screenshot.png)
 
 # Setup
 Clone repository and install dependencies (Note: a virtual environment is recommended)
