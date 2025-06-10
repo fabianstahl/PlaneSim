@@ -75,7 +75,7 @@ class Cylinder(Primitive):
 
         top_z       = 0.5
         bottom_z    = -0.5
-        
+
 
         # --- Side circle vertices ---
         u_step                  = 1.0 / self.segments
@@ -133,3 +133,100 @@ class Cylinder(Primitive):
 
     def get_uv_indices(self):
         return np.array(self.uv_indices, dtype=np.uint32)
+    
+
+
+
+
+class Sphere(Primitive):
+
+    def __init__(self, lat_divs: int = 4, lon_divs: int = 8):
+        self.lat_divs = lat_divs
+        self.lon_divs = lon_divs
+        self.vertices = []
+        self.uvs = []
+        self.indices = []
+
+        self._generate()
+
+
+    def _generate(self):
+        for i in range(self.lat_divs + 1):
+            theta = np.pi * i / self.lat_divs
+            sin_theta = np.sin(theta)
+            cos_theta = np.cos(theta)
+
+            for j in range(self.lon_divs + 1):
+                phi = 2 * np.pi * j / self.lon_divs
+                sin_phi = np.sin(phi)
+                cos_phi = np.cos(phi)
+
+                x = sin_theta * cos_phi * 0.5
+                y = cos_theta * 0.5
+                z = sin_theta * sin_phi * 0.5
+
+                u = j / self.lon_divs
+                v = i / self.lat_divs
+
+                self.vertices.extend([x, z, y])
+                self.uvs.append([u, v])
+
+        for i in range(self.lat_divs):
+            for j in range(self.lon_divs):
+                first = i * (self.lon_divs + 1) + j
+                second = first + self.lon_divs + 1
+
+                self.indices.extend([first, second, first + 1])
+                self.indices.extend([second, second + 1, first + 1])
+
+
+    def get_vertices(self):
+        return np.array(self.vertices, dtype=np.float32)
+
+    def get_vertex_indices(self):
+        return np.array(self.indices, dtype=np.uint32)
+    
+    def get_uv_vertices(self):
+        return np.array(self.uvs, dtype=np.float32)
+
+    def get_uv_indices(self):
+        return np.array(self.indices, dtype=np.uint32)
+    
+    
+
+
+class Cloud(Primitive):
+
+    def __init__(self, min_spheres, max_spheres, min_radius, max_radius, max_offset_xy, max_offset_z):
+
+        no_spheres  = np.random.randint(min_spheres, max_spheres)
+        radius      = np.random.random(no_spheres) / (max_radius - min_radius) + min_radius
+        offset      = np.random.random((no_spheres, 3)) * np.array([max_offset_xy, max_offset_xy, max_offset_z])
+
+
+        self.vertices = []
+        self.uvs = []
+        self.indices = []
+
+        sphere = Sphere()
+
+        for i in range(no_spheres):
+            vertices = np.reshape(sphere.get_vertices(), (-1, 3)) * radius[i] + offset[i]
+            self.vertices.extend(vertices)
+
+            self.uvs.extend(sphere.get_uv_vertices())
+
+            self.indices.extend(len(vertices) * i + sphere.get_vertex_indices() )
+
+
+    def get_vertices(self):
+        return np.array(self.vertices, dtype=np.float32)
+
+    def get_vertex_indices(self):
+        return np.array(self.indices, dtype=np.uint32)
+    
+    def get_uv_vertices(self):
+        return np.array(self.uvs, dtype=np.float32)
+
+    def get_uv_indices(self):
+        return np.array(self.indices, dtype=np.uint32)

@@ -16,7 +16,7 @@ from engine.camera import Camera
 from engine.model import MapTile, Airplane, Model
 from engine.frustum import Frustum
 from engine.vao import VAO
-from engine.primitives import Plane, Cylinder
+from engine.primitives import Plane, Cylinder, Cloud
 
 
 
@@ -67,6 +67,49 @@ class GLWidget(QOpenGLWidget):
             texture_path        = configs.get("plane_tex_path")
         )
 
+        self.clouds     = []
+        self.cloud_vaos = []
+
+        rand_pos        = np.random.random((configs.getint("no_white_clouds"), 2)) * 2 - 1
+        for i in range(configs.getint("no_white_clouds")):
+            clouds_geom     = Cloud(self.configs.getint("cloud_min_spheres"), 
+                                    self.configs.getint("cloud_max_spheres"), 
+                                    self.configs.getfloat("cloud_min_rad"), 
+                                    self.configs.getfloat("cloud_max_rad"), 
+                                    self.configs.getfloat("cloud_max_off_xy"), 
+                                    self.configs.getfloat("cloud_max_off_z"))
+            cloud_vao       = VAO(clouds_geom)
+            self.cloud_vaos.append(cloud_vao)
+
+            cloud           = Model(
+                vao                 = cloud_vao, 
+                position            = glm.vec3(*rand_pos[i], 0.001),
+                scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
+                texture_path        = configs.get("cloud_tex_white")
+            )
+            self.clouds.append(cloud)
+
+        rand_pos        = np.random.random((configs.getint("no_black_clouds"), 2)) * 2 - 1
+        for i in range(configs.getint("no_black_clouds")):
+            clouds_geom     = Cloud(self.configs.getint("cloud_min_spheres"), 
+                                    self.configs.getint("cloud_max_spheres"), 
+                                    self.configs.getfloat("cloud_min_rad"), 
+                                    self.configs.getfloat("cloud_max_rad"), 
+                                    self.configs.getfloat("cloud_max_off_xy"), 
+                                    self.configs.getfloat("cloud_max_off_z"))
+            cloud_vao       = VAO(clouds_geom)
+            self.cloud_vaos.append(cloud_vao)
+
+            cloud           = Model(
+                vao                 = cloud_vao, 
+                position            = glm.vec3(*rand_pos[i], 0.001),
+                scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
+                texture_path        = configs.get("cloud_tex_black")
+            )
+            self.clouds.append(cloud)
+
+
+
         self.air_plane.accelerate(configs.getfloat("plane_init_acc"))
 
         # 0: points, 1: wireframe, 2: textured
@@ -116,6 +159,12 @@ class GLWidget(QOpenGLWidget):
         for target in self.targets:
             target.initializeGL()
 
+        for cloud in self.cloud_vaos:
+            cloud.initializeGL()
+        
+        for cloud in self.clouds:
+            cloud.initializeGL()
+
         self.setup_shaders()
 
         # Get uniform location
@@ -139,8 +188,6 @@ class GLWidget(QOpenGLWidget):
             scale               = 0.001,
             texture_path        = self.configs.get("target_tex_path")
         )
-
-        #target_vao.initializeGL()
         
         target.initializeGL()
 
@@ -194,6 +241,11 @@ class GLWidget(QOpenGLWidget):
         # Render plane
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
         self.air_plane.render()
+
+        # Render clouds
+        for cloud in self.clouds:
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(cloud.model_matrix, dtype=np.float32).T)
+            cloud.render()
 
         # Render targets
         for target in self.targets:
