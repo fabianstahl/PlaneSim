@@ -1,6 +1,7 @@
 # PlaneSim
 PlaneSim is a geography game where you try to find international airports while navigating around storms and avoiding other aircrafts.
 
+![screenshot](assets/screenshot.png)
 
 | Keys | Function | 
 |---|---|
@@ -12,8 +13,6 @@ PlaneSim is a geography game where you try to find international airports while 
 | 1 | Render Points |
 | 2 | Render Wireframe |
 | 3 | Render Textures |
-
-![screenshot](assets/screenshot.png)
 
 # Setup
 Clone repository and install dependencies (Note: a virtual environment is recommended)
