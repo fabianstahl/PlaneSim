@@ -43,7 +43,7 @@ class GLWidget(QOpenGLWidget):
         self.tile_cache     = {}
 
         cylinder_geom       = Cylinder()
-        self.target_vao     = VAO(cylinder_geom.get_vertices(), cylinder_geom.get_indices())
+        self.target_vao     = VAO(cylinder_geom)
 
         self.targets        = []
         for i in range(configs.getint("no_targets")):
@@ -58,7 +58,7 @@ class GLWidget(QOpenGLWidget):
 
 
         plane_geom          = Plane()
-        self.tile_vao       = VAO(plane_geom.get_vertices(), plane_geom.get_indices())
+        self.tile_vao       = VAO(plane_geom)
 
         self.air_plane          = Airplane(
             vao                 = self.tile_vao, 
@@ -66,6 +66,8 @@ class GLWidget(QOpenGLWidget):
             scale               = configs.getfloat("plane_scale"),
             texture_path        = configs.get("plane_tex_path")
         )
+
+        self.air_plane.accelerate(configs.getfloat("plane_init_acc"))
 
         # 0: points, 1: wireframe, 2: textured
         self.render_mode    = 2     
@@ -85,6 +87,9 @@ class GLWidget(QOpenGLWidget):
 
         delta = ms / 1000.0  # Convert to seconds
         self.air_plane.update(delta)
+
+        for target in self.targets:
+            target.update()
 
         new_focus_point = glm.vec3(self.air_plane.position.x, self.air_plane.position.y, 0)
         self.cam.focus(new_focus_point)
@@ -126,11 +131,6 @@ class GLWidget(QOpenGLWidget):
 
     def add_target(self):
         
-        #target_geom     = Cylinder()
-        #target_vao      = VAO(target_geom.get_vertices(), target_geom.get_indices())
-
-        #plane_geom       = Plane()
-        #target_vao       = VAO(plane_geom.get_vertices(), plane_geom.get_indices())
 
         target          = Model(
             vao                 = self.target_vao, 

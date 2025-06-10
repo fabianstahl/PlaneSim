@@ -11,16 +11,21 @@ class Model:
         self.position       = position
         self.scale          = scale
         self.texture_path   = texture_path
-        self.yaw_rad        = 0
+        self.yaw_deg        = 0
         self.model_matrix   = self.calculate_model_matrix()
 
 
     def calculate_model_matrix(self):
         mat = glm.mat4(1.0)
         mat = glm.translate(mat, self.position)
-        mat = glm.rotate(mat, glm.radians(self.yaw_rad), glm.vec3(0, 0, 1))  # rotate around Z
+        mat = glm.rotate(mat, glm.radians(self.yaw_deg), glm.vec3(0, 0, 1))  # rotate around Z
         mat = glm.scale(mat, glm.vec3(self.scale))
         return mat
+
+
+    def update(self):
+        self.yaw_deg        += 1
+        self.model_matrix   = self.calculate_model_matrix()
 
 
     def initializeGL(self):
@@ -55,13 +60,13 @@ class Airplane(Model):
         self.acceleration = acceleration
 
 
-    def rotate(self, angle_rad):
+    def rotate(self, yaw_deg):
         # Rotate around Z axis
 
-        self.yaw_rad        += angle_rad
+        self.yaw_deg        += yaw_deg
         self.model_matrix   = self.calculate_model_matrix()
 
-        rotation            = glm.rotate(glm.mat4(1.0), glm.radians(self.yaw_rad), glm.vec3(0, 0, 1))
+        rotation            = glm.rotate(glm.mat4(1.0), glm.radians(self.yaw_deg), glm.vec3(0, 0, 1))
         self.forward        = glm.vec3(rotation * glm.vec4(0, 1, 0, 1.0))
 
 
