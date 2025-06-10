@@ -75,17 +75,8 @@ class Cylinder(Primitive):
 
         top_z       = 0.5
         bottom_z    = -0.5
-
-        # --- Center vertices ---
-        top_center_index    = 0
-        bottom_center_index = 1
         
-        self.vertices.append([0.0, 0.0, top_z])     # top center
-        self.uv_vertices.append([1.0, 1.0])
 
-        self.vertices.append([0.0, 0.0, bottom_z])  # bottom center
-        self.uv_vertices.append([0.0, 0.0])
-        
         # --- Side circle vertices ---
         u_step                  = 1.0 / self.segments
         for i in range(self.segments):
@@ -105,36 +96,13 @@ class Cylinder(Primitive):
 
             # Top edge vertex
             self.vertices.append([x, y, top_z])
-            top_circle_indices.append(2 + i * 2)
+            top_circle_indices.append(i * 2)
 
             # Bottom edge vertex
             self.vertices.append([x, y, bottom_z])
-            bottom_circle_indices.append(2 + i * 2 + 1)
+            bottom_circle_indices.append(i * 2 + 1)
         
-        # --- Top face indices ---
-        for i in range(self.segments):
-            next_i = (i + 1) % self.segments
-            self.indices.extend([
-                top_center_index,
-                top_circle_indices[i],
-                top_circle_indices[next_i],
-            ])
-            self.uv_indices.extend([
-                0, 0, 0
-            ])
-        
-        # --- Bottom face indices ---
-        for i in range(self.segments):
-            next_i = (i + 1) % self.segments
-            self.indices.extend([
-                bottom_center_index,
-                bottom_circle_indices[i],
-                bottom_circle_indices[next_i]
-            ])
-            self.uv_indices.extend([
-                1, 1, 1
-            ])
-        
+            
         # --- Side indices (as quads split into triangles) ---
         for i in range(self.segments):
             next_i = (i + 1) % self.segments
@@ -146,11 +114,11 @@ class Cylinder(Primitive):
 
             # First triangle
             self.indices.extend([top_current, bottom_current, top_next])
-            self.uv_indices.extend([3 + (i*2), 2 + (i*2), 5 + (i*2)])
+            self.uv_indices.extend([1 + (i*2), (i*2), 3 + (i*2)])
             
             # Second triangle
             self.indices.extend([top_next, bottom_current, bottom_next])
-            self.uv_indices.extend([5 + (i*2), 2 + (i*2), 4 + (i*2)])
+            self.uv_indices.extend([3 + (i*2), (i*2), 2 + (i*2)])
 
 
 

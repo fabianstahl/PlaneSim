@@ -102,6 +102,7 @@ class GLWidget(QOpenGLWidget):
         glClearColor(*bg_color)
         glClearDepth(1.0)
         glEnable(GL_CULL_FACE)
+        glDepthMask(GL_FALSE)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glPointSize(self.configs.getfloat("point_size"))
@@ -190,14 +191,14 @@ class GLWidget(QOpenGLWidget):
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(tile.model_matrix, dtype=np.float32).T)
             tile.render()
 
+        # Render plane
+        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
+        self.air_plane.render()
+
         # Render targets
         for target in self.targets:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(target.model_matrix, dtype=np.float32).T)
             target.render()
-
-        # Render plane
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
-        self.air_plane.render()
 
 
     def resizeGL(self, w, h):
