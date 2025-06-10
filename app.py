@@ -231,6 +231,18 @@ class GLWidget(QOpenGLWidget):
             self.render_mode = 2
         elif key == Qt.Key.Key_Space:
             self.add_target()
+        elif key == Qt.Key.Key_PageUp:
+            self.cam.tilt(-5)
+        elif key == Qt.Key.Key_PageDown:
+            self.cam.tilt(5)
+        elif key == Qt.Key.Key_Plus:
+            self.cam.zoom(self.configs.getfloat("cam_zoom_factor") * glm.length(self.cam.position.z) - self.configs.getfloat("cam_zoom_offset"))
+        elif key == Qt.Key.Key_Minus:
+            self.cam.zoom(-self.configs.getfloat("cam_zoom_factor") * glm.length(self.cam.position.z) - self.configs.getfloat("cam_zoom_offset"))
+        elif key == Qt.Key.Key_Right:
+            self.cam.orbit(5)
+        elif key == Qt.Key.Key_Left:
+            self.cam.orbit(-5)
         """
         if key == Qt.Key.Key_W:
             self.cam.translate(glm.vec3(0, 0.1, 0))
@@ -309,10 +321,10 @@ class GLWidget(QOpenGLWidget):
         dx = end_pos.x() - start_pos.x()
         dy = end_pos.y() - start_pos.y()
 
-        sensitivity = 0.005  # adjust this to taste
+        sensitivity = 0.1
         
         self.cam.tilt(dy * sensitivity)
-        #self.cam.orbit(dx * sensitivity)
+        self.cam.orbit(dx * sensitivity)
 
 
 
