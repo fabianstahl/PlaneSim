@@ -6,12 +6,12 @@ import numpy as np
 
 class Model:
 
-    def __init__(self, vao, position, scale, texture_path):
+    def __init__(self, vao, position, scale, texture_path, orbit_deg):
         self.vao            = vao
         self.position       = position
         self.scale          = scale
         self.texture_path   = texture_path
-        self.orbit_deg      = 0
+        self.orbit_deg      = orbit_deg
         self.model_matrix   = self.calculate_model_matrix()
 
 
@@ -47,9 +47,9 @@ class Model:
 
 class Target(Model):
 
-    def __init__(self, vao, position, scale, texture_path, rotation_speed):
+    def __init__(self, vao, position, scale, texture_path, orbit_deg, rotation_speed):
 
-        super().__init__(vao, position, scale, texture_path)
+        super().__init__(vao, position, scale, texture_path, orbit_deg)
 
         self.rotation_speed     = rotation_speed
 
@@ -60,9 +60,9 @@ class Target(Model):
 
 
 class Airplane(Model):
-    def __init__(self, vao, position, scale, texture_path):
+    def __init__(self, vao, position, scale, texture_path, orbit_deg):
 
-        super().__init__(vao, position, scale, texture_path)
+        super().__init__(vao, position, scale, texture_path, orbit_deg)
         
         self.forward        = glm.vec3(0, 1, 0)
         self.velocity       = 0
@@ -106,6 +106,6 @@ class Airplane(Model):
 
 class MapTile(Model):
 
-    def __init__(self, vao, position, scale, texture_path):
+    def __init__(self, vao, position, scale, texture_path, orbit_deg):
 
-        super().__init__(vao, position, scale, texture_path)
+        super().__init__(vao, position, scale, texture_path, orbit_deg)

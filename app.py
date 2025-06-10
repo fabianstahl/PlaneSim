@@ -53,7 +53,8 @@ class GLWidget(QOpenGLWidget):
                 vao                 = self.target_vao, 
                 position            = glm.vec3(*airport.position, configs.getfloat("target_height") / 2),
                 scale               = glm.vec3(configs.getfloat("target_radius"), configs.getfloat("target_radius"), configs.getfloat("target_height")),
-                texture_path        = configs.get("target_tex_path"), 
+                texture_path        = configs.get("target_tex_path"),
+                orbit_deg           = 0,
                 rotation_speed      = configs.getfloat("target_rot_speed")
             )
             self.targets.append(target)
@@ -68,8 +69,22 @@ class GLWidget(QOpenGLWidget):
             vao                 = self.tile_vao, 
             position            = glm.vec3(utils.parse_list(configs["plane_position"], float)),
             scale               = configs.getfloat("plane_scale"),
-            texture_path        = configs.get("plane_tex_path")
+            texture_path        = configs.get("plane_tex_path"), 
+            orbit_deg           = configs.getfloat("plane_rot")
         )
+
+        self.enemies    = []
+        rand_pos        = np.random.random((configs.getint("no_enemies"), 2)) * 2 - 1
+        rand_rot        = (0, 356, configs.getint("no_enemies"))
+        for i in range(configs.getint("no_enemies")):
+            enemy       = Airplane(
+                vao             = self.tile_vao, 
+                position        = glm.vec3(*rand_pos[i], configs.getfloat("enemy_height")),
+                scale           = configs.getfloat("enemy_scale"),
+                texture_path    = configs.get("enemy_tex_path"),
+                orbit_deg       = rand_rot[0]
+            )
+            self.enemies.append(enemy)
 
         self.clouds     = []
         self.cloud_vaos = []
@@ -89,7 +104,8 @@ class GLWidget(QOpenGLWidget):
                 vao                 = cloud_vao, 
                 position            = glm.vec3(*rand_pos[i], 0.001),
                 scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
-                texture_path        = configs.get("cloud_tex_white")
+                texture_path        = configs.get("cloud_tex_white"), 
+                orbit_deg           = 0
             )
             self.clouds.append(cloud)
 
@@ -108,7 +124,8 @@ class GLWidget(QOpenGLWidget):
                 vao                 = cloud_vao, 
                 position            = glm.vec3(*rand_pos[i], 0.001),
                 scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
-                texture_path        = configs.get("cloud_tex_black")
+                texture_path        = configs.get("cloud_tex_black"), 
+                orbit_deg           = 0
             )
             self.clouds.append(cloud)
 
@@ -132,12 +149,14 @@ class GLWidget(QOpenGLWidget):
         delta = ms / 1000.0  # Convert to seconds
         self.air_plane.update(delta)
 
+        for enemy in self.enemies:
+            enemy.update(delta)
+
         for target in self.targets:
             target.update()
 
         new_focus_point = glm.vec3(self.air_plane.position.x, self.air_plane.position.y, 0)
         self.cam.focus(new_focus_point)
-
 
         if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
             self.mission = self.mission_manager.new_mission()
@@ -171,6 +190,9 @@ class GLWidget(QOpenGLWidget):
         for cloud in self.clouds:
             cloud.initializeGL()
 
+        for enemy in self.enemies:
+            enemy.initializeGL()
+
         self.setup_shaders()
 
         # Get uniform location
@@ -184,6 +206,7 @@ class GLWidget(QOpenGLWidget):
         vertex_shader   = Shader("shaders/vertex_shader.glsl", GL_VERTEX_SHADER)
         fragment_shader = Shader("shaders/fragment_shader.glsl", GL_FRAGMENT_SHADER)
         self.program    = Program(vertex_shader, fragment_shader)
+
 
     def add_target(self):
         
@@ -231,7 +254,7 @@ class GLWidget(QOpenGLWidget):
                 y_pos               = 2 * (y - center + 0.5) / 2**z
                 position            = glm.vec3(y_pos, x_pos, 0)
                 texture_path        = "data/tiles_esri/{}/{}/{}.png".format(z, x, y)
-                tile                = MapTile(self.tile_vao, position, scale, texture_path)
+                tile                = MapTile(self.tile_vao, position, scale, texture_path, 0)
                 tile.initializeGL()
                 self.tile_cache[(x, y, z)] = tile
 
@@ -260,6 +283,11 @@ class GLWidget(QOpenGLWidget):
         for target in self.targets:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(target.model_matrix, dtype=np.float32).T)
             target.render()
+
+        # Render enemies
+        for enemy in self.enemies:
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(enemy.model_matrix, dtype=np.float32).T)
+            enemy.render()
 
         # Start QPainter after OpenGL
         painter = QPainter(self)

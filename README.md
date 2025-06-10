@@ -26,6 +26,6 @@ python app.py
 * Add Tiling around world borders / seemless transitions
 * Add Package Drop Of functionality
 * Add Airplane Shadow
-* Add other airplanes
+* Add enemy interaction
 * Add dangerous cloud crashes
 * write README
