@@ -20,7 +20,7 @@ class Camera:
         self.aspect     = aspect
         self.near       = near
         self.far        = far
-        self.tilt_deg   = 70
+        self.tilt_deg   = 65
         self.orbit_deg  = 0
 
         self._update_view_matrix()

@@ -7,7 +7,7 @@ import numpy as np
 
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtGui import QSurfaceFormat
+from PyQt6.QtGui import QSurfaceFormat, QPainter, QColor, QFont
 from PyQt6.QtCore import QTimer, Qt, QElapsedTimer
 from OpenGL.GL import *
 
@@ -112,9 +112,6 @@ class GLWidget(QOpenGLWidget):
             self.clouds.append(cloud)
 
 
-
-        self.air_plane.accelerate(configs.getfloat("plane_init_acc"))
-
         # 0: points, 1: wireframe, 2: textured
         self.render_mode    = 2     
 
@@ -206,6 +203,9 @@ class GLWidget(QOpenGLWidget):
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
         self.program.use()
 
         if self.render_mode == 0:
@@ -261,6 +261,18 @@ class GLWidget(QOpenGLWidget):
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(target.model_matrix, dtype=np.float32).T)
             target.render()
 
+        # Start QPainter after OpenGL
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setPen(QColor(255, 120, 128))
+        painter.setFont(QFont("Arial", 30))
+        text    = "Reach '{}, {}'".format(self.mission.target.name, self.mission.target.country)
+        width   = painter.fontMetrics().horizontalAdvance(text)
+        x_pos   = configs.getint("window_width") // 2 - width // 2
+        y_pos   = configs.getint("window_height") - 20
+        painter.drawText(x_pos, y_pos, text)
+        painter.end()
+
 
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
@@ -289,11 +301,13 @@ class GLWidget(QOpenGLWidget):
         elif key == Qt.Key.Key_S:
             self.air_plane.accelerate(-0.01)
         elif key == Qt.Key.Key_A:
-            self.air_plane.rotate(1)
-            self.cam.orbit(1)
+            self.air_plane.rotate(2)
+            angle = self.air_plane.orbit_deg - self.cam.orbit_deg
+            self.cam.orbit(angle)
         elif key == Qt.Key.Key_D:
-            self.air_plane.rotate(-1)
-            self.cam.orbit(-1)
+            self.air_plane.rotate(-2)
+            angle = self.air_plane.orbit_deg - self.cam.orbit_deg
+            self.cam.orbit(angle)
         elif key == Qt.Key.Key_1:
             self.render_mode = 0
         elif key == Qt.Key.Key_2:

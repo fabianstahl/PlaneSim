@@ -24,7 +24,7 @@ class AirportManager:
 
         # Skip header
         columns         = next(reader)
-        print("\n".join(["{}: {}".format(i, c) for i, c in enumerate(columns)]))
+        #print("\n".join(["{}: {}".format(i, c) for i, c in enumerate(columns)]))
 
         for line in reader:
             airport_type = line[2]
