@@ -6,7 +6,7 @@ import numpy as np
 
 class Model:
 
-    def __init__(self, vao, position, scale, texture_path, orbit_deg):
+    def __init__(self, vao, position, scale, texture_path, orbit_deg = 0):
         self.vao            = vao
         self.position       = position
         self.scale          = scale
@@ -28,7 +28,6 @@ class Model:
         pass
 
 
-
     def initializeGL(self):
         self.texture    = Texture(self.texture_path)
 
@@ -47,11 +46,10 @@ class Model:
 
 class Target(Model):
 
-    def __init__(self, vao, position, scale, texture_path, orbit_deg, rotation_speed):
-
-        super().__init__(vao, position, scale, texture_path, orbit_deg)
-
+    def __init__(self, rotation_speed, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.rotation_speed     = rotation_speed
+
 
     def update(self):
         self.orbit_deg      += self.rotation_speed
@@ -60,16 +58,14 @@ class Target(Model):
 
 
 class Airplane(Model):
-    def __init__(self, vao, position, scale, texture_path, orbit_deg):
-
-        super().__init__(vao, position, scale, texture_path, orbit_deg)
+    def __init__(self, min_vel, max_vel, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         
         self.forward        = glm.vec3(0, 1, 0)
         self.velocity       = 0
         self.acceleration   = 0
-
-        self.max_vel        = 0.04
-        self.min_vel        = 0.005
+        self.min_vel        = min_vel
+        self.max_vel        = max_vel
 
 
     def accelerate(self, acceleration):
@@ -78,12 +74,10 @@ class Airplane(Model):
 
     def rotate(self, orbit_deg):
         # Rotate around Z axis
-
         self.orbit_deg      += orbit_deg
-        self.model_matrix   = self.calculate_model_matrix()
-
         rotation            = glm.rotate(glm.mat4(1.0), glm.radians(self.orbit_deg), glm.vec3(0, 0, 1))
         self.forward        = glm.vec3(rotation * glm.vec4(0, 1, 0, 1.0))
+        self.model_matrix   = self.calculate_model_matrix()
 
 
     def update(self, delta):
@@ -106,6 +100,5 @@ class Airplane(Model):
 
 class MapTile(Model):
 
-    def __init__(self, vao, position, scale, texture_path, orbit_deg):
-
-        super().__init__(vao, position, scale, texture_path, orbit_deg)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
