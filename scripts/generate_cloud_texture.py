@@ -3,8 +3,8 @@ import numpy as np
 
 size        = (200, 200, 4)
 noise_level = 10
-min_alpha   = 0.3
-max_alpha   = 0.4
+min_alpha   = 0.0
+max_alpha   = 0.2
 
 cloud_base_colors   = [(1, 1, 1), (0, 0, 0)]
 cloud_paths         = ["assets/cloud_white.png", "assets/cloud_black.png"]

@@ -13,7 +13,7 @@ from OpenGL.GL import *
 
 from engine.shader import Shader, Program
 from engine.camera import Camera
-from engine.model import MapTile, Airplane, Model
+from engine.model import MapTile, Airplane, Model, Target
 from engine.frustum import Frustum
 from engine.vao import VAO
 from engine.primitives import Plane, Cylinder, Cloud
@@ -49,11 +49,12 @@ class GLWidget(QOpenGLWidget):
         self.mission_manager    = MissionManager(configs)
         self.targets            = []
         for airport in self.mission_manager.get_airports():
-            target          = Model(
+            target          = Target(
                 vao                 = self.target_vao, 
                 position            = glm.vec3(*airport.position, configs.getfloat("target_height") / 2),
                 scale               = glm.vec3(configs.getfloat("target_radius"), configs.getfloat("target_radius"), configs.getfloat("target_height")),
-                texture_path        = configs.get("target_tex_path")
+                texture_path        = configs.get("target_tex_path"), 
+                rotation_speed      = configs.getfloat("target_rot_speed")
             )
             self.targets.append(target)
 
@@ -139,7 +140,6 @@ class GLWidget(QOpenGLWidget):
 
 
         if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
-            print("YAY!")
             self.mission = self.mission_manager.new_mission()
             print("New Mission: Reach '{}, {}'".format(self.mission.target.name, self.mission.target.country))
 

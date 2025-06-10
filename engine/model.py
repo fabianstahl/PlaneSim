@@ -24,8 +24,9 @@ class Model:
 
 
     def update(self):
-        self.orbit_deg      += 1
-        self.model_matrix   = self.calculate_model_matrix()
+        print("Nothing to update")
+        pass
+
 
 
     def initializeGL(self):
@@ -41,6 +42,21 @@ class Model:
     def release(self):
         self.vao.release()
         self.texture.release()
+
+
+
+class Target(Model):
+
+    def __init__(self, vao, position, scale, texture_path, rotation_speed):
+
+        super().__init__(vao, position, scale, texture_path)
+
+        self.rotation_speed     = rotation_speed
+
+    def update(self):
+        self.orbit_deg      += self.rotation_speed
+        self.model_matrix   = self.calculate_model_matrix()
+
 
 
 class Airplane(Model):

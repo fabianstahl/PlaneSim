@@ -24,11 +24,8 @@ python app.py
 
 # TODOs
 * Add Tiling around world borders / seemless transitions
-* Add config files
 * Add Package Drop Of functionality
-* Add Missions
 * Add Airplane Shadow
 * Add other airplanes
-* Add normal clouds
-* Add dangerous clouds
+* Add dangerous cloud crashes
 * write README
