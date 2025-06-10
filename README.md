@@ -9,10 +9,9 @@ PlaneSim is a geography game where you try to find international airports while 
 | Space | Shoot rocket |
 | Page_Up, Page_Down | Tilt Camera |
 | Arrow_Left, Arrow_Right | Orbit Camer |
+| 1, 2, 3 | Render Mode: Points / Wireframe / Textured|
+| +, - | Zoom In / Out |
 | Esc | Close App |
-| 1 | Render Points |
-| 2 | Render Wireframe |
-| 3 | Render Textures |
 
 # Setup
 Clone repository and install dependencies (Note: a virtual environment is recommended)
