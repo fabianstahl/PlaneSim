@@ -4,8 +4,8 @@ class VAO:
 
     def __init__(self, vertices, indices):
 
-        self.vertices   = vertices
-        self.indices    = indices
+        self.vertices       = vertices
+        self.indices        = indices
 
 
     def initializeGL(self):
@@ -21,6 +21,8 @@ class VAO:
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.ebo)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, self.indices.nbytes, self.indices, GL_STATIC_DRAW)
 
+        print(self.indices.nbytes, self.vertices.itemsize)
+
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * self.vertices.itemsize, ctypes.c_void_p(0))
         glEnableVertexAttribArray(0)
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * self.vertices.itemsize, ctypes.c_void_p(12))
@@ -28,11 +30,12 @@ class VAO:
 
         glBindVertexArray(0)
 
+
     def use(self):
         glBindVertexArray(self.vao)
 
     def render(self):
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
+        glDrawElements(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, None)
 
     def release(self):
         glDeleteVertexArrays(1, [self.vao])

@@ -3,6 +3,7 @@ import numpy as np
 import glm
 import configparser as cfg
 import utils
+import numpy as np
 
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
@@ -12,10 +13,10 @@ from OpenGL.GL import *
 
 from engine.shader import Shader, Program
 from engine.camera import Camera
-from engine.model import MapTile, Airplane
+from engine.model import MapTile, Airplane, Model
 from engine.frustum import Frustum
 from engine.vao import VAO
-from engine.primitives import Plane
+from engine.primitives import Plane, Cylinder
 
 
 
@@ -41,8 +42,23 @@ class GLWidget(QOpenGLWidget):
         self.frustum        = Frustum()
         self.tile_cache     = {}
 
+        cylinder_geom       = Cylinder()
+        self.target_vao     = VAO(cylinder_geom.get_vertices(), cylinder_geom.get_indices())
+
+        self.targets        = []
+        for i in range(configs.getint("no_targets")):
+            rand_pos        = np.random.random(2) * 2 - 1
+            target          = Model(
+                vao                 = self.target_vao, 
+                position            = glm.vec3(*rand_pos, configs.getfloat("target_height") / 2),
+                scale               = glm.vec3(0.01, 0.01, configs.getfloat("target_height")),
+                texture_path        = configs.get("target_tex_path")
+            )
+            self.targets.append(target)
+
+
         plane_geom          = Plane()
-        self.tile_vao       = VAO(plane_geom.vertices, plane_geom.indices)
+        self.tile_vao       = VAO(plane_geom.get_vertices(), plane_geom.get_indices())
 
         self.air_plane          = Airplane(
             vao                 = self.tile_vao, 
@@ -83,11 +99,16 @@ class GLWidget(QOpenGLWidget):
         glEnable(GL_CULL_FACE)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glPointSize(configs.getfloat("point_size"))
+        glPointSize(self.configs.getfloat("point_size"))
 
         self.air_plane.initializeGL()
         
         self.tile_vao.initializeGL()
+
+        self.target_vao.initializeGL()
+
+        for target in self.targets:
+            target.initializeGL()
 
         self.setup_shaders()
 
@@ -103,6 +124,26 @@ class GLWidget(QOpenGLWidget):
         fragment_shader = Shader("shaders/fragment_shader.glsl", GL_FRAGMENT_SHADER)
         self.program    = Program(vertex_shader, fragment_shader)
 
+    def add_target(self):
+        
+        #target_geom     = Cylinder()
+        #target_vao      = VAO(target_geom.get_vertices(), target_geom.get_indices())
+
+        #plane_geom       = Plane()
+        #target_vao       = VAO(plane_geom.get_vertices(), plane_geom.get_indices())
+
+        target          = Model(
+            vao                 = self.target_vao, 
+            position            = glm.vec3(self.air_plane.position[0], self.air_plane.position[1], 0.003),
+            scale               = 0.001,
+            texture_path        = self.configs.get("target_tex_path")
+        )
+
+        #target_vao.initializeGL()
+        
+        target.initializeGL()
+
+        self.targets.append(target)
 
     def paintGL(self):
 
@@ -149,6 +190,11 @@ class GLWidget(QOpenGLWidget):
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(tile.model_matrix, dtype=np.float32).T)
             tile.render()
 
+        # Render targets
+        for target in self.targets:
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(target.model_matrix, dtype=np.float32).T)
+            target.render()
+
         # Render plane
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
         self.air_plane.render()
@@ -182,6 +228,8 @@ class GLWidget(QOpenGLWidget):
             self.render_mode = 1
         elif key == Qt.Key.Key_3:
             self.render_mode = 2
+        elif key == Qt.Key.Key_Space:
+            self.add_target()
         """
         if key == Qt.Key.Key_W:
             self.cam.translate(glm.vec3(0, 0.1, 0))
