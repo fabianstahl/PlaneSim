@@ -17,7 +17,7 @@ from engine.model import MapTile, Airplane, Model
 from engine.frustum import Frustum
 from engine.vao import VAO
 from engine.primitives import Plane, Cylinder, Cloud
-
+from geography import MissionManager
 
 
 class GLWidget(QOpenGLWidget):
@@ -45,17 +45,20 @@ class GLWidget(QOpenGLWidget):
         cylinder_geom       = Cylinder()
         self.target_vao     = VAO(cylinder_geom)
 
-        self.targets        = []
-        for i in range(configs.getint("no_targets")):
-            rand_pos        = np.random.random(2) * 2 - 1
+        
+        self.mission_manager    = MissionManager(configs)
+        self.targets            = []
+        for airport in self.mission_manager.get_airports():
             target          = Model(
                 vao                 = self.target_vao, 
-                position            = glm.vec3(*rand_pos, configs.getfloat("target_height") / 2),
-                scale               = glm.vec3(0.01, 0.01, configs.getfloat("target_height")),
+                position            = glm.vec3(*airport.position, configs.getfloat("target_height") / 2),
+                scale               = glm.vec3(configs.getfloat("target_radius"), configs.getfloat("target_radius"), configs.getfloat("target_height")),
                 texture_path        = configs.get("target_tex_path")
             )
             self.targets.append(target)
 
+        self.mission        = self.mission_manager.new_mission()
+        print("New Mission: Reach '{}, {}'".format(self.mission.target.name, self.mission.target.country))
 
         plane_geom          = Plane()
         self.tile_vao       = VAO(plane_geom)
@@ -136,6 +139,12 @@ class GLWidget(QOpenGLWidget):
 
         new_focus_point = glm.vec3(self.air_plane.position.x, self.air_plane.position.y, 0)
         self.cam.focus(new_focus_point)
+
+
+        if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
+            print("YAY!")
+            self.mission = self.mission_manager.new_mission()
+            print("New Mission: Reach '{}, {}'".format(self.mission.target.name, self.mission.target.country))
 
         self.update()
 
@@ -265,16 +274,26 @@ class GLWidget(QOpenGLWidget):
         self.program.release()
 
 
+    def delegate_key_released(self, event):
+        key = event.key()
+        if key == Qt.Key.Key_W:
+            self.air_plane.accelerate(0)
+        elif key == Qt.Key.Key_S:
+            self.air_plane.accelerate(0)
+
+
     def delegate_key_pressed(self, event):
         key = event.key()
         if key == Qt.Key.Key_W:
-            self.air_plane.accelerate(0.004)
+            self.air_plane.accelerate(0.0075)
         elif key == Qt.Key.Key_S:
-            self.air_plane.accelerate(-0.004)
+            self.air_plane.accelerate(-0.01)
         elif key == Qt.Key.Key_A:
             self.air_plane.rotate(1)
+            self.cam.orbit(1)
         elif key == Qt.Key.Key_D:
             self.air_plane.rotate(-1)
+            self.cam.orbit(-1)
         elif key == Qt.Key.Key_1:
             self.render_mode = 0
         elif key == Qt.Key.Key_2:
@@ -405,6 +424,9 @@ class MainWindow(QMainWindow):
             self.gl_widget.release()
             self.close()
         self.gl_widget.delegate_key_pressed(event)
+
+    def keyReleaseEvent(self, event):
+        self.gl_widget.delegate_key_released(event)
 
 
     def wheelEvent(self, event):

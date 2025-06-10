@@ -52,8 +52,8 @@ class Airplane(Model):
         self.velocity       = 0
         self.acceleration   = 0
 
-        self.max_vel        = 0.01
-        self.max_acc        = 1
+        self.max_vel        = 0.05
+        self.min_vel        = 0.005
 
 
     def accelerate(self, acceleration):
@@ -78,8 +78,8 @@ class Airplane(Model):
         # Optional: clamp max velocity
         if self.velocity > self.max_vel:
             self.velocity = self.max_vel
-        elif self.velocity < 0:
-            self.velocity = 0  # Prevent moving backward if you want
+        elif self.velocity < self.min_vel:
+            self.velocity = self.min_vel  # Prevent moving backward if you want
 
         # Integrate velocity to position
         self.position += self.forward * self.velocity * delta
