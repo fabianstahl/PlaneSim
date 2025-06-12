@@ -10,9 +10,9 @@ class Model:
         self.vao            = vao
         self.position       = position
         self.scale          = scale
-        self.texture_path   = texture_path
         self.orbit_deg      = orbit_deg
         self.model_matrix   = self.calculate_model_matrix()
+        self.texture        = Texture(texture_path)
 
 
     def calculate_model_matrix(self):
@@ -29,7 +29,7 @@ class Model:
 
 
     def initializeGL(self):
-        self.texture    = Texture(self.texture_path)
+        self.texture.initializeGL()
 
 
     def render(self):

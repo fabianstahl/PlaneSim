@@ -6,15 +6,6 @@ import numpy as np
 class Texture():
 
     def __init__(self, path, backup_path = "assets/test.png"):
-        self.texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, self.texture)
-
-        # Texture parameters
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-
         
         try:
             if not os.path.exists(path):
@@ -34,10 +25,23 @@ class Texture():
             image = np.concatenate((image, alpha), axis=2)
 
         # Convert BGR(A) to RGB(A)
-        image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
+        self.data = cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.shape[1], image.shape[0], 0, GL_RGBA, GL_UNSIGNED_BYTE, image.tobytes())
+
+
+    def initializeGL(self):
+        self.texture = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, self.texture)
+
+        # Texture parameters
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.data.shape[1], self.data.shape[0], 0, GL_RGBA, GL_UNSIGNED_BYTE, self.data.tobytes())
         glGenerateMipmap(GL_TEXTURE_2D)
+
 
     def use(self):
         glBindTexture(GL_TEXTURE_2D, self.texture)
