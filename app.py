@@ -10,6 +10,7 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtGui import QSurfaceFormat, QPainter, QColor, QFont
 from PyQt6.QtCore import QTimer, Qt, QElapsedTimer
 from OpenGL.GL import *
+from concurrent.futures import ThreadPoolExecutor
 
 from engine.shader import Shader, Program
 from engine.camera import Camera
@@ -257,22 +258,17 @@ class GLWidget(QOpenGLWidget):
         tile_ids = self.frustum.cull(self.cam.get_projection_matrix() * self.cam.get_view_matrix())
         
         # Add missing tiles
-        for (x, y, z) in tile_ids:
-            if not (x, y, z) in self.tile_cache:
-                center              = 2**z // 2
-                scale               = 2 / 2**z
-                x_pos               = 2 * (-x + center - 0.5) / 2**z
-                y_pos               = 2 * (y - center + 0.5) / 2**z
-                position            = glm.vec3(y_pos, x_pos, 0)
-                texture_path        = "data/tiles_esri/{}/{}/{}.png".format(z, x, y)
-                tile                = MapTile(
-                        vao             = self.tile_vao,
-                        position        = position,
-                        scale           = scale,
-                        texture_path    = texture_path
-                )
-                tile.initializeGL()
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            for (x, y, z) in tile_ids:
+                if (x, y, z) not in self.tile_cache:
+                    futures.append(executor.submit(MapTile.prepare_tile, x, y, z, self.tile_vao))
+
+            for future in futures:
+                x, y, z, tile = future.result()
                 self.tile_cache[(x, y, z)] = tile
+                tile.initializeGL()
+
 
         # Remove tiles no longer visible
         for key in list(self.tile_cache.keys()):

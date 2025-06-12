@@ -124,3 +124,20 @@ class MapTile(Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+
+    def prepare_tile(x, y, z, vao):
+        center      = 2**z // 2
+        scale       = 2 / 2**z
+        x_pos       = 2 * (-x + center - 0.5) / 2**z
+        y_pos       = 2 * (y - center + 0.5) / 2**z
+        position    = glm.vec3(y_pos, x_pos, 0)
+        texture_path= f"data/tiles_esri/{z}/{x}/{y}.png"
+
+        tile = MapTile(
+            vao          = vao,
+            position     = position,
+            scale        = scale,
+            texture_path = texture_path
+        )
+        return (x, y, z, tile)
