@@ -42,6 +42,13 @@ class Model:
         self.vao.release()
         self.texture.release()
 
+    
+    def translate(self, offset):
+        self.position += offset
+
+        if self.position.z < 0:
+            self.position.z = 0
+
 
 
 class Target(Model):

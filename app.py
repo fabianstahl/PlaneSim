@@ -13,7 +13,7 @@ from OpenGL.GL import *
 from concurrent.futures import ThreadPoolExecutor
 
 from engine.shader import Shader, Program
-from engine.camera import Camera
+from engine.camera import PivotCamera
 from engine.model import MapTile, Airplane, Model, Target, Rocket
 from engine.frustum import Frustum
 from engine.vao import VAO
@@ -30,11 +30,12 @@ class GLWidget(QOpenGLWidget):
 
         self.shader_program = None
 
-        self.cam            = Camera(
-                    position    = glm.vec3(utils.parse_list(configs["cam_position"], float)),
-                    target      = glm.vec3(utils.parse_list(configs["cam_target"], float)),
-                    up          = glm.vec3(utils.parse_list(configs["cam_up"], float)),
-                    fov_degrees = configs.getfloat("cam_fov"), 
+        self.cam            = PivotCamera(
+                    pivot_point = glm.vec3(utils.parse_list(configs["cam_pivot_point"], float)),
+                    tilt_deg    = configs.getfloat("cam_tilt_deg"),
+                    orbit_deg   = configs.getfloat("cam_orbit_deg"),
+                    distance    = configs.getfloat("cam_distance"),
+                    fov_deg     = configs.getfloat("cam_fov"), 
                     aspect      = configs.getint("window_width") / configs.getint("window_height"), 
                     near        = configs.getfloat("cam_near"), 
                     far         = configs.getfloat("cam_far")
@@ -164,8 +165,7 @@ class GLWidget(QOpenGLWidget):
             if rocket.is_destroyable():
                 self.rockets.remove(rocket)
 
-        new_focus_point = glm.vec3(self.air_plane.position.x, self.air_plane.position.y, 0)
-        self.cam.focus(new_focus_point)
+        self.cam.focus(self.air_plane.position)
 
         if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
             self.mission = self.mission_manager.new_mission()
@@ -347,11 +347,11 @@ class GLWidget(QOpenGLWidget):
             self.air_plane.accelerate(-0.01)
         elif key == Qt.Key.Key_A:
             self.air_plane.rotate(2)
-            angle = self.air_plane.orbit_deg - self.cam.orbit_deg
+            angle = self.air_plane.orbit_deg - glm.degrees(self.cam.orbit_rad)
             self.cam.orbit(angle)
         elif key == Qt.Key.Key_D:
             self.air_plane.rotate(-2)
-            angle = self.air_plane.orbit_deg - self.cam.orbit_deg
+            angle = self.air_plane.orbit_deg - glm.degrees(self.cam.orbit_rad)
             self.cam.orbit(angle)
         elif key == Qt.Key.Key_1:
             self.render_mode = 0
@@ -366,34 +366,28 @@ class GLWidget(QOpenGLWidget):
         elif key == Qt.Key.Key_PageDown:
             self.cam.tilt(5)
         elif key == Qt.Key.Key_Plus:
-            self.cam.zoom(self.configs.getfloat("cam_zoom_factor") * glm.length(self.cam.position.z) - self.configs.getfloat("cam_zoom_offset"))
+            new_cam_dist = self.cam.distance - self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
+            self.cam.zoom(new_cam_dist)
         elif key == Qt.Key.Key_Minus:
-            self.cam.zoom(-self.configs.getfloat("cam_zoom_factor") * glm.length(self.cam.position.z) - self.configs.getfloat("cam_zoom_offset"))
+            new_cam_dist = self.cam.distance + self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
+            self.cam.zoom(new_cam_dist)
         elif key == Qt.Key.Key_Right:
             self.cam.orbit(5)
         elif key == Qt.Key.Key_Left:
             self.cam.orbit(-5)
-        """
-        if key == Qt.Key.Key_W:
-            self.cam.translate(glm.vec3(0, 0.1, 0))
-        elif key == Qt.Key.Key_S:
-            self.cam.translate(glm.vec3(0, -0.1, 0))
-        elif key == Qt.Key.Key_A:
-            self.cam.translate(glm.vec3(-0.1, 0, 0))
-        elif key == Qt.Key.Key_D:
-            self.cam.translate(glm.vec3(0.1, 0, 0))
-        """
-
+        elif key == Qt.Key.Key_Down:
+            self.air_plane.translate(glm.vec3(0, 0, 0.0001))
+        elif key == Qt.Key.Key_Up:
+            self.air_plane.translate(glm.vec3(0, 0, -0.0001))
+        self.update()
 
 
     def delegate_wheel_event(self, event):
 
-        delta       = event.angleDelta().y() / 120  # One step = 120
-        zoom_speed  = 0.1 * glm.length(self.cam.position.z) - 0.0001
-
-        # Move camera along its forward direction
-        self.cam.zoom(delta * zoom_speed)
-
+        sensitivity     = configs.getfloat("wheel_sensitivity")
+        delta           = -event.angleDelta().y() / 120 * sensitivity# One step = 120
+        new_cam_dist    = self.cam.distance + delta * self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
+        self.cam.zoom(new_cam_dist)
 
 
     def delegate_mouse_pressed_event(self, event):
@@ -424,26 +418,6 @@ class GLWidget(QOpenGLWidget):
         p_far  /= p_far.w
 
         return glm.vec3(p_near), glm.vec3(p_far)
-
-
-    def delegate_translation(self, start_pos, end_pos):
-
-        ray_start_old, ray_end_old = self.screen_ray(start_pos)
-        ray_start_new, ray_end_new = self.screen_ray(end_pos)
-
-        # Intersect both rays with z=0 plane
-        def intersect_z0(start, end):
-            dir = end - start
-            t = -start.z / dir.z
-            return start + t * dir
-
-        p_old = intersect_z0(ray_start_old, ray_end_old)
-        p_new = intersect_z0(ray_start_new, ray_end_new)
-
-        delta = p_old - p_new
-
-        self.cam.move(delta)
-
 
 
     def delegate_tilt(self, orbit_center, start_pos, end_pos):
@@ -517,9 +491,8 @@ class MainWindow(QMainWindow):
 
     def mouseMoveEvent(self, event):
         if self.left_mouse_down:
-            new_pos = event.position()
-            self.gl_widget.delegate_translation(self.last_mouse_pos, new_pos)
-            self.last_mouse_pos = new_pos
+            # TODO: Implement arcball?
+            pass
         elif self.middle_mouse_down:
             new_pos = event.position()
             self.gl_widget.delegate_tilt(self.orbit_center, self.last_mouse_pos, new_pos)
