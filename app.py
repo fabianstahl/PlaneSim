@@ -208,6 +208,7 @@ class GLWidget(QOpenGLWidget):
         self.model_loc  = self.program.get_uniform_location("model")
         self.view_loc   = self.program.get_uniform_location("view")
         self.proj_loc   = self.program.get_uniform_location("projection")
+        self.alpha_loc  = self.program.get_uniform_location("alpha")
 
 
 
@@ -253,6 +254,7 @@ class GLWidget(QOpenGLWidget):
         # Upload matrices
         glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, np.array(self.cam.get_view_matrix(), dtype=np.float32).T)
         glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, np.array(self.cam.get_projection_matrix(), dtype=np.float32).T)
+        glUniform1f(self.alpha_loc, 1.0)
 
         # Perform Frustum culling
         tile_ids = self.frustum.cull(self.cam.get_projection_matrix() * self.cam.get_view_matrix())
@@ -285,6 +287,16 @@ class GLWidget(QOpenGLWidget):
         # Render plane
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
         self.air_plane.render()
+
+        # Render plane shadow
+        glUniform1f(self.alpha_loc, self.configs.getfloat("shadow_alpha"))
+        mat = glm.mat4(1.0)
+        mat = glm.translate(mat, (self.air_plane.position[0], self.air_plane.position[1], 0.000001))
+        mat = glm.rotate(mat, glm.radians(self.air_plane.orbit_deg), glm.vec3(0, 0, 1))  # rotate around Z
+        mat = glm.scale(mat, glm.vec3(self.air_plane.scale))
+        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(mat, dtype=np.float32).T)
+        self.air_plane.render()
+        glUniform1f(self.alpha_loc, 1.0)
 
         # Render clouds
         for cloud in self.clouds:
