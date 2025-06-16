@@ -321,19 +321,16 @@ class GLWidget(QOpenGLWidget):
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
         self.air_plane.render()
 
-        """
-        # TODO: not working anymore with the current logic
         # Render plane shadow
         glUniform1f(self.alpha_loc, self.configs.getfloat("shadow_alpha"))
         mat = glm.mat4(1.0)
         mat = glm.translate(mat, (self.air_plane.position[0], self.air_plane.position[1], 0.000001))
-        mat = glm.rotate(mat, self.air_plane.yaw_rad, glm.vec3(0, 0, 1))  # rotate around Z
+        mat = mat * glm.mat4_cast(self.air_plane.orientation)
         mat = glm.scale(mat, glm.vec3(self.air_plane.scale))
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(mat, dtype=np.float32).T)
         self.air_plane.render()
         glUniform1f(self.alpha_loc, 1.0)
-        """
-
+        
         # Render clouds
         for cloud in self.clouds:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(cloud.model_matrix, dtype=np.float32).T)
