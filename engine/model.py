@@ -3,24 +3,62 @@ from engine.texture import Texture
 import glm
 import numpy as np
 
+# Camera Systemr elative to plane
+RIGHT       = glm.vec3(1, 0, 0)     # pitch
+FORWARD     = glm.vec3(0, 1, 0)     # roll
+UP          = glm.vec3(0, 0, 1)    # yaw
 
 class Model:
 
-    def __init__(self, vao, position, scale, texture_path, orbit_deg = 0):
+    def __init__(self, vao, position, scale, texture_path, yaw_deg = 0, pitch_deg = 0, roll_deg = 0):
         self.vao            = vao
         self.position       = position
         self.scale          = scale
-        self.orbit_deg      = orbit_deg
-        self.model_matrix   = self.calculate_model_matrix()
+        self.model_matrix   = glm.mat4(1.0)
+        self.orientation    = glm.quat()
+
+        self.add_yaw(glm.radians(yaw_deg))
+        self.add_pitch(glm.radians(pitch_deg))
+        self.add_roll(glm.radians(roll_deg))
+
+        self._update_model_matrix()
+
         self.texture        = Texture(texture_path)
 
 
-    def calculate_model_matrix(self):
-        mat = glm.mat4(1.0)
-        mat = glm.translate(mat, self.position)
-        mat = glm.rotate(mat, glm.radians(self.orbit_deg), glm.vec3(0, 0, 1))  # rotate around Z
-        mat = glm.scale(mat, glm.vec3(self.scale))
-        return mat
+    def _update_model_matrix(self):
+        
+        identity        = glm.mat4(1.0)
+
+        # Translation
+        model_trans     = glm.translate(identity, self.position)
+
+        # Scale
+        model_scale     = glm.scale(identity, glm.vec3(self.scale))
+
+        #self.model_matrix = model_trans * model_roll * model_pitch * model_yaw * model_scale * model
+        self.model_matrix = model_trans * glm.mat4_cast(self.orientation) * model_scale * identity
+
+
+    def add_yaw(self, yaw_deg):
+        yaw_rad     = glm.radians(yaw_deg)
+        q_delta     = glm.angleAxis(yaw_rad, self.orientation * UP)
+        self.orientation = q_delta * self.orientation
+        self._update_model_matrix()
+
+
+    def add_pitch(self, pitch_deg):
+        pitch_rad   = glm.radians(pitch_deg) 
+        q_delta     = glm.angleAxis(pitch_rad, self.orientation * RIGHT)
+        self.orientation = q_delta * self.orientation
+        self._update_model_matrix()
+
+
+    def add_roll(self, roll_deg):
+        roll_rad    = glm.radians(roll_deg)
+        q_delta     = glm.angleAxis(roll_rad, self.orientation * FORWARD)
+        self.orientation = q_delta * self.orientation
+        self._update_model_matrix()
 
 
     def update(self):
@@ -59,8 +97,8 @@ class Target(Model):
 
 
     def update(self):
-        self.orbit_deg      += self.rotation_speed
-        self.model_matrix   = self.calculate_model_matrix()
+        self.add_yaw(self.rotation_speed)
+        self._update_model_matrix()
 
 
 
@@ -75,9 +113,9 @@ class Rocket(Model):
 
 
     def update(self):
-        self.position      += self.forward * self.rocket_speed
+        self.position       += self.forward * self.rocket_speed
         self.no_updates     += 1
-        self.model_matrix   = self.calculate_model_matrix()
+        self._update_model_matrix()
 
     
     def is_destroyable(self):
@@ -85,32 +123,27 @@ class Rocket(Model):
 
 
 
-
 class Airplane(Model):
+
     def __init__(self, min_vel, max_vel, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        self.forward        = glm.vec3(0, 1, 0)
         self.velocity       = 0
         self.acceleration   = 0
         self.min_vel        = min_vel
         self.max_vel        = max_vel
 
 
+    def get_forward(self):
+        return glm.normalize(glm.vec3(self.model_matrix[1]))
+
+
     def accelerate(self, acceleration):
         self.acceleration = acceleration
 
 
-    def rotate(self, orbit_deg):
-        # Rotate around Z axis
-        self.orbit_deg      += orbit_deg
-        rotation            = glm.rotate(glm.mat4(1.0), glm.radians(self.orbit_deg), glm.vec3(0, 0, 1))
-        self.forward        = glm.vec3(rotation * glm.vec4(0, 1, 0, 1.0))
-        self.model_matrix   = self.calculate_model_matrix()
-
-
     def update(self, delta):
-
+        
         # Integrate acceleration to velocity
         self.velocity += self.acceleration * delta
 
@@ -121,9 +154,10 @@ class Airplane(Model):
             self.velocity = self.min_vel  # Prevent moving backward if you want
 
         # Integrate velocity to position
-        self.position += self.forward * self.velocity * delta
+        forward        = glm.normalize(glm.vec3(self.model_matrix[1]))
+        self.position += forward * self.velocity * delta
 
-        self.model_matrix = self.calculate_model_matrix()
+        self._update_model_matrix()
 
 
 

@@ -5,10 +5,12 @@ PlaneSim is a geography game where you try to find international airports while 
 
 | Keys | Function | 
 |---|---|
-| W, A, S, D | Move Plane |
+| W, S | Accelerate / Decelerate |
+| A, D | Yaw Rotation |
+| Arrow_Up, Arrow_Down | Pitch Rotation |
+| Arrow_Left, Arrow_Right | Roll Rotation |
 | Space | Shoot rocket |
 | Page_Up, Page_Down | Tilt Camera |
-| Arrow_Left, Arrow_Right | Orbit Camer |
 | 1, 2, 3 | Render Mode: Points / Wireframe / Textured|
 | +, - | Zoom In / Out |
 | Esc | Close App |

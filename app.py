@@ -72,7 +72,7 @@ class GLWidget(QOpenGLWidget):
             position            = glm.vec3(utils.parse_list(configs["plane_position"], float)),
             scale               = configs.getfloat("plane_scale"),
             texture_path        = configs.get("plane_tex_path"), 
-            orbit_deg           = configs.getfloat("plane_rot"), 
+            yaw_deg             = configs.getfloat("plane_rot"), 
             min_vel             = configs.getfloat("plane_min_vel"),
             max_vel             = configs.getfloat("plane_max_vel")
         )
@@ -86,7 +86,7 @@ class GLWidget(QOpenGLWidget):
                 position        = glm.vec3(*rand_pos[i], configs.getfloat("enemy_height")),
                 scale           = configs.getfloat("enemy_scale"),
                 texture_path    = configs.get("enemy_tex_path"),
-                orbit_deg       = rand_rot[0], 
+                yaw_deg         = rand_rot[0], 
                 min_vel         = configs.getfloat("plane_min_vel"),
                 max_vel         = configs.getfloat("plane_max_vel")
             )
@@ -111,7 +111,7 @@ class GLWidget(QOpenGLWidget):
                 position            = glm.vec3(*rand_pos[i], 0.001),
                 scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
                 texture_path        = configs.get("cloud_tex_white"), 
-                orbit_deg           = 0
+                yaw_deg             = 0
             )
             self.clouds.append(cloud)
 
@@ -166,6 +166,15 @@ class GLWidget(QOpenGLWidget):
                 self.rockets.remove(rocket)
 
         self.cam.focus(self.air_plane.position)
+        
+        
+        v1          = glm.vec2(0, 1)
+        plane_forw  = self.air_plane.get_forward()
+        v2          = glm.vec2(plane_forw.x, plane_forw.y)
+        angle_rad   = utils.signed_angle_2d(v1, v2)
+        angle_off   = glm.degrees(angle_rad - self.cam.orbit_rad)        
+        self.cam.orbit(angle_off)
+        
 
         if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
             self.mission = self.mission_manager.new_mission()
@@ -225,9 +234,8 @@ class GLWidget(QOpenGLWidget):
             position            = glm.vec3(*self.air_plane.position),
             scale               = 0.001,
             texture_path        = self.configs.get("rocket_tex_path"), 
-            orbit_deg           = self.air_plane.orbit_deg, 
+            forward             = self.air_plane.get_forward(), 
             rocket_speed        = self.configs.getfloat("rocket_speed"),
-            forward             = self.air_plane.forward, 
             life_time           = self.configs.getint("rocket_life_time")
         )
         
@@ -288,15 +296,18 @@ class GLWidget(QOpenGLWidget):
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
         self.air_plane.render()
 
+        """
+        # TODO: not working anymore with the current logic
         # Render plane shadow
         glUniform1f(self.alpha_loc, self.configs.getfloat("shadow_alpha"))
         mat = glm.mat4(1.0)
         mat = glm.translate(mat, (self.air_plane.position[0], self.air_plane.position[1], 0.000001))
-        mat = glm.rotate(mat, glm.radians(self.air_plane.orbit_deg), glm.vec3(0, 0, 1))  # rotate around Z
+        mat = glm.rotate(mat, self.air_plane.yaw_rad, glm.vec3(0, 0, 1))  # rotate around Z
         mat = glm.scale(mat, glm.vec3(self.air_plane.scale))
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(mat, dtype=np.float32).T)
         self.air_plane.render()
         glUniform1f(self.alpha_loc, 1.0)
+        """
 
         # Render clouds
         for cloud in self.clouds:
@@ -358,13 +369,9 @@ class GLWidget(QOpenGLWidget):
         elif key == Qt.Key.Key_S:
             self.air_plane.accelerate(-0.01)
         elif key == Qt.Key.Key_A:
-            self.air_plane.rotate(2)
-            angle = self.air_plane.orbit_deg - glm.degrees(self.cam.orbit_rad)
-            self.cam.orbit(angle)
+            self.air_plane.add_yaw(2)
         elif key == Qt.Key.Key_D:
-            self.air_plane.rotate(-2)
-            angle = self.air_plane.orbit_deg - glm.degrees(self.cam.orbit_rad)
-            self.cam.orbit(angle)
+            self.air_plane.add_yaw(-2)
         elif key == Qt.Key.Key_1:
             self.render_mode = 0
         elif key == Qt.Key.Key_2:
@@ -384,14 +391,13 @@ class GLWidget(QOpenGLWidget):
             new_cam_dist = self.cam.distance + self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
             self.cam.zoom(new_cam_dist)
         elif key == Qt.Key.Key_Right:
-            self.cam.orbit(5)
+            self.air_plane.add_roll(2)
         elif key == Qt.Key.Key_Left:
-            self.cam.orbit(-5)
+            self.air_plane.add_roll(-2)
         elif key == Qt.Key.Key_Down:
-            self.air_plane.translate(glm.vec3(0, 0, 0.0001))
+            self.air_plane.add_pitch(2)
         elif key == Qt.Key.Key_Up:
-            self.air_plane.translate(glm.vec3(0, 0, -0.0001))
-        self.update()
+            self.air_plane.add_pitch(-2)
 
 
     def delegate_wheel_event(self, event):
