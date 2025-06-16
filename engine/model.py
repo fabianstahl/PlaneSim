@@ -178,6 +178,9 @@ class Airplane(Model):
         forward        = glm.normalize(glm.vec3(self.model_matrix[1]))
         self.position += forward * self.velocity * delta
 
+        if self.position.z < 0:
+            self.position.z = 0
+
         self._update_model_matrix()
 
 
