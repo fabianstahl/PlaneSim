@@ -53,10 +53,10 @@ class PivotCamera:
         new_forward         = glm.vec3(rotation_tilt * FORWARD)
 
         # Get new camera position 
-        cam_pos             = self.pivot_point + new_forward * self.distance
+        self.cam_pos        = self.pivot_point + new_forward * self.distance
 
         # LookAt Matrix: eye, center, up
-        self._view_matrix   = glm.lookAt(cam_pos, self.pivot_point, new_up)
+        self._view_matrix   = glm.lookAt(self.cam_pos, self.pivot_point, new_up)
 
 
     def _update_projection_marix(self) -> glm.mat4:

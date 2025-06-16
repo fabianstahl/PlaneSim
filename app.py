@@ -41,7 +41,7 @@ class GLWidget(QOpenGLWidget):
                     far         = configs.getfloat("cam_far")
         )
         
-        self.frustum        = Frustum()
+        self.frustum        = Frustum(configs.getint("tile_max_z"))
         self.tile_cache     = {}
 
         cylinder_geom       = Cylinder()
@@ -299,7 +299,7 @@ class GLWidget(QOpenGLWidget):
         # = Tiles =
 
         # Add missing tiles
-        tile_ids = self.frustum.cull(self.cam.get_projection_matrix() * self.cam.get_view_matrix())
+        tile_ids = self.frustum.cull(self.cam.get_projection_matrix() * self.cam.get_view_matrix(), self.cam.cam_pos)
         with ThreadPoolExecutor() as executor:
             futures = []
             for (x, y, z) in tile_ids:
@@ -405,9 +405,9 @@ class GLWidget(QOpenGLWidget):
     def delegate_key_pressed(self, event):
         key = event.key()
         if key == Qt.Key.Key_W:
-            self.air_plane.accelerate(0.0075)
+            self.air_plane.accelerate(self.configs.getfloat("plane_gas_acc"))
         elif key == Qt.Key.Key_S:
-            self.air_plane.accelerate(-0.01)
+            self.air_plane.accelerate(self.configs.getfloat("plane_brake_acc"))
         elif key == Qt.Key.Key_A:
             self.air_plane.add_yaw(2)
         elif key == Qt.Key.Key_D:
