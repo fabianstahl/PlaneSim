@@ -17,11 +17,9 @@ class Model:
         self.model_matrix   = glm.mat4(1.0)
         self.orientation    = glm.quat()
 
-        self.add_yaw(glm.radians(yaw_deg))
-        self.add_pitch(glm.radians(pitch_deg))
-        self.add_roll(glm.radians(roll_deg))
-
-        self._update_model_matrix()
+        self.add_yaw(yaw_deg)
+        self.add_pitch(pitch_deg)
+        self.add_roll(roll_deg)
 
         self.texture        = Texture(texture_path)
 

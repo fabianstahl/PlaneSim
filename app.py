@@ -17,7 +17,7 @@ from engine.camera import PivotCamera
 from engine.model import MapTile, Airplane, Model, Target, Rocket, Strip
 from engine.frustum import Frustum
 from engine.vao import VAO
-from engine.primitives import Plane, Cylinder, Cloud
+from engine.primitives import Plane, Cylinder, Cloud, OBJ
 from geography import MissionManager
 
 
@@ -68,8 +68,10 @@ class GLWidget(QOpenGLWidget):
         plane_geom          = Plane()
         self.tile_vao       = VAO(plane_geom)
 
+        air_plane_geom      = OBJ(configs.get("plane_obj_path"))
+        self.air_plane_vao  = VAO(air_plane_geom)
         self.air_plane          = Airplane(
-            vao                 = self.tile_vao, 
+            vao                 = self.air_plane_vao, 
             position            = glm.vec3(utils.parse_list(configs["plane_position"], float)),
             scale               = configs.getfloat("plane_scale"),
             texture_path        = configs.get("plane_tex_path"), 
@@ -80,14 +82,14 @@ class GLWidget(QOpenGLWidget):
 
         self.enemies    = []
         rand_pos        = np.random.random((configs.getint("no_enemies"), 2)) * 2 - 1
-        rand_rot        = (0, 356, configs.getint("no_enemies"))
+        rand_rot        = np.random.randint(0, 356, configs.getint("no_enemies"))
         for i in range(configs.getint("no_enemies")):
             enemy       = Airplane(
-                vao             = self.tile_vao, 
+                vao             = self.air_plane_vao, 
                 position        = glm.vec3(*rand_pos[i], configs.getfloat("enemy_height")),
                 scale           = configs.getfloat("enemy_scale"),
-                texture_path    = configs.get("enemy_tex_path"),
-                yaw_deg         = rand_rot[0], 
+                texture_path    = configs.get("plane_tex_path"),
+                yaw_deg         = rand_rot[i], 
                 min_vel         = configs.getfloat("plane_min_vel"),
                 max_vel         = configs.getfloat("plane_max_vel")
             )
@@ -193,12 +195,13 @@ class GLWidget(QOpenGLWidget):
         bg_color = utils.parse_list(self.configs["clear_color"], float)
         glClearColor(*bg_color)
         glClearDepth(1.0)
-        #glEnable(GL_CULL_FACE)
+        glEnable(GL_CULL_FACE)
         glDepthMask(GL_FALSE)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glPointSize(self.configs.getfloat("point_size"))
 
+        self.air_plane_vao.initializeGL()
         self.air_plane.initializeGL()
         
         self.tile_vao.initializeGL()
@@ -269,14 +272,10 @@ class GLWidget(QOpenGLWidget):
 
 
     def paintGL(self):
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
+        
+        # Setup Rendering
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)  
         self.program.use()
-
         if self.render_mode == 0:
             glPolygonMode(GL_FRONT_AND_BACK, GL_POINT)
         elif self.render_mode == 1:
@@ -284,15 +283,21 @@ class GLWidget(QOpenGLWidget):
         else:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
-        # Upload matrices
         glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, np.array(self.cam.get_view_matrix(), dtype=np.float32).T)
         glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, np.array(self.cam.get_projection_matrix(), dtype=np.float32).T)
         glUniform1f(self.alpha_loc, 1.0)
-
-        # Perform Frustum culling
-        tile_ids = self.frustum.cull(self.cam.get_projection_matrix() * self.cam.get_view_matrix())
         
+
+        # === Stage 1: Render opaque objects ===
+        glEnable(GL_DEPTH_TEST)
+        glDepthMask(GL_TRUE)  # Write to depth buffer
+        glDisable(GL_BLEND)
+        glEnable(GL_CULL_FACE)
+
+        # = Tiles =
+
         # Add missing tiles
+        tile_ids = self.frustum.cull(self.cam.get_projection_matrix() * self.cam.get_view_matrix())
         with ThreadPoolExecutor() as executor:
             futures = []
             for (x, y, z) in tile_ids:
@@ -304,59 +309,64 @@ class GLWidget(QOpenGLWidget):
                 self.tile_cache[(x, y, z)] = tile
                 tile.initializeGL()
 
-
         # Remove tiles no longer visible
         for key in list(self.tile_cache.keys()):
             if not key in tile_ids:
                 self.tile_cache[key].release
                 self.tile_cache.pop(key)
 
-
         # Render tiles
         for tile in self.tile_cache.values():
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(tile.model_matrix, dtype=np.float32).T)
             tile.render()
 
-        # Render plane
+        # = Plane =
         glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
         self.air_plane.render()
 
-        # Render plane shadow
-        glUniform1f(self.alpha_loc, self.configs.getfloat("shadow_alpha"))
-        mat = glm.mat4(1.0)
-        mat = glm.translate(mat, (self.air_plane.position[0], self.air_plane.position[1], 0.000001))
-        mat = mat * glm.mat4_cast(self.air_plane.orientation)
-        mat = glm.scale(mat, glm.vec3(self.air_plane.scale))
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(mat, dtype=np.float32).T)
-        self.air_plane.render()
-        glUniform1f(self.alpha_loc, 1.0)
-        
-        # Render clouds
+        # = Enemies =
+        for enemy in self.enemies:
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(enemy.model_matrix, dtype=np.float32).T)
+            enemy.render()
+       
+
+        # === Stage 2: Render Semi-Transparent objects ===
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glDepthMask(GL_FALSE)  # Don't write to depth, but still use it
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_CULL_FACE)
+
+        # = Clouds =
         for cloud in self.clouds:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(cloud.model_matrix, dtype=np.float32).T)
             cloud.render()
 
-        # Render targets
+        # = Targets =
         for target in self.targets:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(target.model_matrix, dtype=np.float32).T)
             target.render()
 
-        # Render enemies
-        for enemy in self.enemies:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(enemy.model_matrix, dtype=np.float32).T)
-            enemy.render()
 
-        # Render rockets
+        # === Stage 3: Render Semi-Transparent objects without face culling ===
+        glDisable(GL_CULL_FACE)
+
+        # = Rockets =
         for rocket in self.rockets:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(rocket.model_matrix, dtype=np.float32).T)
             rocket.render()
 
-        # Render condensation strips
+        # = Strips =
         for strip in self.strips:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(strip.model_matrix, dtype=np.float32).T)
             strip.render()
 
-        # Start QPainter after OpenGL
+        glEnable(GL_CULL_FACE)
+
+
+        # === Stage 4: Render Overlays ===
+
+        # = Target Airport Desciption =
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         painter.setPen(QColor(255, 120, 128))
@@ -367,6 +377,7 @@ class GLWidget(QOpenGLWidget):
         y_pos   = configs.getint("window_height") - 20
         painter.drawText(x_pos, y_pos, text)
         painter.end()
+        
 
 
     def resizeGL(self, w, h):

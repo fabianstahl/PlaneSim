@@ -1,6 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Sequence, List
+from parser import OBJ_Parser
 
 
 class Primitive(ABC):
@@ -230,3 +231,30 @@ class Cloud(Primitive):
 
     def get_uv_indices(self):
         return np.array(self.indices, dtype=np.uint32)
+    
+
+
+class OBJ(Primitive):
+
+    def __init__(self, obj_path):
+        
+        parser = OBJ_Parser(obj_path)
+
+        self.vertex_positions, self.vertex_indices  = parser.get_vertex_data()
+        self.uv_positions, self.uv_indices          = parser.get_uv_data()
+
+        # Rotate according to the simulator geography coordinate system
+        self.vertex_positions       = self.vertex_positions[:, [1, 0, 2]]   # (x, y) -> (y, x)
+        self.vertex_positions[:,1] *= -1                                    # (x) -> (-x)
+
+    def get_vertices(self):
+        return self.vertex_positions
+
+    def get_vertex_indices(self):
+        return self.vertex_indices
+
+    def get_uv_vertices(self):
+        return self.uv_positions
+
+    def get_uv_indices(self):
+        return self.uv_indices
