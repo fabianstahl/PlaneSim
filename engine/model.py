@@ -61,6 +61,11 @@ class Model:
         self._update_model_matrix()
 
 
+    def set_orientation(self, orientation):
+        self.orientation = orientation
+        self._update_model_matrix()
+
+
     def update(self):
         print("Nothing to update")
         pass
@@ -114,6 +119,24 @@ class Rocket(Model):
 
     def update(self):
         self.position       += self.forward * self.rocket_speed
+        self.no_updates     += 1
+        self._update_model_matrix()
+
+    
+    def is_destroyable(self):
+        return self.no_updates >= self.life_time
+    
+
+
+class Strip(Model):
+
+    def __init__(self, life_time, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.life_time      = life_time
+        self.no_updates     = 0
+
+
+    def update(self):
         self.no_updates     += 1
         self._update_model_matrix()
 

@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from engine.shader import Shader, Program
 from engine.camera import PivotCamera
-from engine.model import MapTile, Airplane, Model, Target, Rocket
+from engine.model import MapTile, Airplane, Model, Target, Rocket, Strip
 from engine.frustum import Frustum
 from engine.vao import VAO
 from engine.primitives import Plane, Cylinder, Cloud
@@ -48,6 +48,7 @@ class GLWidget(QOpenGLWidget):
         self.target_vao     = VAO(cylinder_geom)
 
         self.rockets        = []
+        self.strips         = []
         
         self.mission_manager    = MissionManager(configs)
         self.targets            = []
@@ -165,16 +166,21 @@ class GLWidget(QOpenGLWidget):
             if rocket.is_destroyable():
                 self.rockets.remove(rocket)
 
+        for strip in self.strips:
+            strip.update()
+            if strip.is_destroyable():
+                self.strips.remove(strip)
+
+        self.add_strip()
+       
         self.cam.focus(self.air_plane.position)
-        
-        
+
         v1          = glm.vec2(0, 1)
         plane_forw  = self.air_plane.get_forward()
         v2          = glm.vec2(plane_forw.x, plane_forw.y)
         angle_rad   = utils.signed_angle_2d(v1, v2)
         angle_off   = glm.degrees(angle_rad - self.cam.orbit_rad)        
         self.cam.orbit(angle_off)
-        
 
         if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
             self.mission = self.mission_manager.new_mission()
@@ -187,7 +193,7 @@ class GLWidget(QOpenGLWidget):
         bg_color = utils.parse_list(self.configs["clear_color"], float)
         glClearColor(*bg_color)
         glClearDepth(1.0)
-        glEnable(GL_CULL_FACE)
+        #glEnable(GL_CULL_FACE)
         glDepthMask(GL_FALSE)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -232,16 +238,35 @@ class GLWidget(QOpenGLWidget):
         rocket          = Rocket(
             vao                 = self.tile_vao, 
             position            = glm.vec3(*self.air_plane.position),
-            scale               = 0.001,
+            scale               = self.configs.getfloat("plane_scale"),
             texture_path        = self.configs.get("rocket_tex_path"), 
             forward             = self.air_plane.get_forward(), 
             rocket_speed        = self.configs.getfloat("rocket_speed"),
             life_time           = self.configs.getint("rocket_life_time")
         )
+        rocket.set_orientation(self.air_plane.orientation)
         
         rocket.initializeGL()
 
         self.rockets.append(rocket)
+
+
+    def add_strip(self):
+        
+        strip           = Strip(
+            vao                 = self.tile_vao, 
+            position            = glm.vec3(*self.air_plane.position),
+            scale               = self.configs.getfloat("plane_scale"),
+            texture_path        = self.configs.get("strip_tex_path"), 
+            life_time           = self.configs.getint("strip_life_time")
+        )
+        strip.set_orientation(self.air_plane.orientation)
+
+        
+        strip.initializeGL()
+
+        self.strips.append(strip)
+
 
     def paintGL(self):
 
@@ -328,6 +353,11 @@ class GLWidget(QOpenGLWidget):
         for rocket in self.rockets:
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(rocket.model_matrix, dtype=np.float32).T)
             rocket.render()
+
+        # Render condensation strips
+        for strip in self.strips:
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(strip.model_matrix, dtype=np.float32).T)
+            strip.render()
 
         # Start QPainter after OpenGL
         painter = QPainter(self)
