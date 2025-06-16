@@ -37,6 +37,7 @@ class PivotCamera:
 
     def set_aspect(self, aspect: float):
         self.aspect = aspect
+        self._update_projection_marix()
 
 
     def _update_view_matrix(self) -> glm.mat4:
