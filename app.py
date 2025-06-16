@@ -407,6 +407,8 @@ class GLWidget(QOpenGLWidget):
             self.air_plane.accelerate(0)
         elif key == Qt.Key.Key_S:
             self.air_plane.accelerate(0)
+        elif key == Qt.Key.Key_Shift:
+            self.air_plane.accelerate(0)
 
 
     def delegate_key_pressed(self, event):
@@ -417,6 +419,8 @@ class GLWidget(QOpenGLWidget):
             self.air_plane.accelerate(self.configs.getfloat("plane_gas_acc"))
         elif key == Qt.Key.Key_S:
             self.air_plane.accelerate(self.configs.getfloat("plane_brake_acc"))
+        elif key == Qt.Key.Key_Shift:
+            self.air_plane.accelerate(self.configs.getfloat("plane_nitro_acc"))
         elif key == Qt.Key.Key_A:
             self.air_plane.add_yaw(2)
         elif key == Qt.Key.Key_D:
