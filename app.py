@@ -98,7 +98,8 @@ class GLWidget(QOpenGLWidget):
         self.clouds     = []
         self.cloud_vaos = []
 
-        rand_pos        = np.random.random((configs.getint("no_white_clouds"), 2)) * 2 - 1
+        rand_pos_xy     = np.random.random((configs.getint("no_white_clouds"), 2)) * 2 - 1
+        rand_pos_z      = np.random.random(configs.getint("no_white_clouds")) * configs.getfloat("cloud_max_height")
         for i in range(configs.getint("no_white_clouds")):
             clouds_geom     = Cloud(self.configs.getint("cloud_min_spheres"), 
                                     self.configs.getint("cloud_max_spheres"), 
@@ -111,14 +112,15 @@ class GLWidget(QOpenGLWidget):
 
             cloud           = Model(
                 vao                 = cloud_vao, 
-                position            = glm.vec3(*rand_pos[i], 0.001),
+                position            = glm.vec3(*rand_pos_xy[i], rand_pos_z[i]),
                 scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
                 texture_path        = configs.get("cloud_tex_white"), 
                 yaw_deg             = 0
             )
             self.clouds.append(cloud)
 
-        rand_pos        = np.random.random((configs.getint("no_black_clouds"), 2)) * 2 - 1
+        rand_pos_xy     = np.random.random((configs.getint("no_black_clouds"), 2)) * 2 - 1
+        rand_pos_z      = np.random.random(configs.getint("no_black_clouds")) * configs.getfloat("cloud_max_height")
         for i in range(configs.getint("no_black_clouds")):
             clouds_geom     = Cloud(self.configs.getint("cloud_min_spheres"), 
                                     self.configs.getint("cloud_max_spheres"), 
@@ -131,7 +133,7 @@ class GLWidget(QOpenGLWidget):
 
             cloud           = Model(
                 vao                 = cloud_vao, 
-                position            = glm.vec3(*rand_pos[i], 0.001),
+                position            = glm.vec3(*rand_pos_xy[i], rand_pos_z[i]),
                 scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
                 texture_path        = configs.get("cloud_tex_black")
             )
