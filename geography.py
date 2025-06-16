@@ -37,6 +37,13 @@ class AirportManager:
         print("Found '{}' airports!".format(len(self.airports)))
 
 
+    def position_by_name(self, substring):
+        for airport in self.airports:
+            if substring.lower() in airport.name.lower():
+                return airport.position
+
+
+
 
 class Mission:
 

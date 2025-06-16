@@ -30,6 +30,8 @@ class GLWidget(QOpenGLWidget):
 
         self.shader_program = None
 
+        self.flight_started = False
+
         self.cam            = PivotCamera(
                     pivot_point = glm.vec3(utils.parse_list(configs["cam_pivot_point"], float)),
                     tilt_deg    = configs.getfloat("cam_tilt_deg"),
@@ -70,9 +72,10 @@ class GLWidget(QOpenGLWidget):
 
         air_plane_geom      = OBJ(configs.get("plane_obj_path"))
         self.air_plane_vao  = VAO(air_plane_geom)
+        plane_position      = self.mission_manager.airport_manager.position_by_name(configs.get("start_airport"))
         self.air_plane          = Airplane(
             vao                 = self.air_plane_vao, 
-            position            = glm.vec3(utils.parse_list(configs["plane_position"], float)),
+            position            = glm.vec3(*plane_position, configs.getfloat("plane_init_height")),
             scale               = configs.getfloat("plane_scale"),
             texture_path        = configs.get("plane_tex_path"), 
             yaw_deg             = configs.getfloat("plane_rot"), 
@@ -150,6 +153,8 @@ class GLWidget(QOpenGLWidget):
         self.elapsed_timer  = QElapsedTimer()
         self.elapsed_timer.start()
 
+        self.cam.focus(self.air_plane.position)
+
 
     def update_game(self):
 
@@ -157,7 +162,9 @@ class GLWidget(QOpenGLWidget):
         self.elapsed_timer.restart()
 
         delta = ms / 1000.0  # Convert to seconds
-        self.air_plane.update(delta)
+
+        if self.flight_started:
+            self.air_plane.update(delta)
 
         for enemy in self.enemies:
             enemy.update(delta)
@@ -405,6 +412,8 @@ class GLWidget(QOpenGLWidget):
     def delegate_key_pressed(self, event):
         key = event.key()
         if key == Qt.Key.Key_W:
+            if not self.flight_started:
+                self.flight_started = True
             self.air_plane.accelerate(self.configs.getfloat("plane_gas_acc"))
         elif key == Qt.Key.Key_S:
             self.air_plane.accelerate(self.configs.getfloat("plane_brake_acc"))
