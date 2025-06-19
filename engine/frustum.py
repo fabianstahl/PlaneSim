@@ -2,6 +2,8 @@ import glm
 import numpy as np
 import sys
 
+from numba import njit
+
 def get_ray_plane_intersection(inv_viewproj, ndc_x, ndc_y):
     # Start at near plane (NDC z = -1), homogeneous clip space
     start = glm.vec4(ndc_x, ndc_y, -1.0, 1.0)
@@ -19,6 +21,7 @@ def get_ray_plane_intersection(inv_viewproj, ndc_x, ndc_y):
 
 
 
+@njit
 def get_normals(polygon):
     """Returns the normals (perpendicular vectors) of the polygon edges."""
     normals = []
@@ -33,22 +36,22 @@ def get_normals(polygon):
     return normals
 
 
+@njit
 def project_polygon(polygon, axis):
     """Projects a polygon onto an axis and returns the min and max projection values."""
     projections = np.dot(polygon, axis)
     return projections.min(), projections.max()
 
 
+@njit
 def overlap(min_a, max_a, min_b, max_b):
     """Returns True if the projection intervals overlap."""
     return max_a >= min_b and max_b >= min_a
 
 
+@njit
 def test_plane_intersection_2d(points_a, points_b):
-    """
-    Tests if two convex 2D polygons intersect.
-    """
-
+    """Tests if two convex 2D polygons intersect."""
     axes = get_normals(points_a) + get_normals(points_b)
 
     for axis in axes:
@@ -69,7 +72,7 @@ class Frustum:
 
 
     def cull(self, vp_matrix: glm.mat4, cam_pos: glm.vec3, z = 0):
-        
+
         inv_viewproj = glm.inverse(vp_matrix)
 
         # Find frustum boundries
