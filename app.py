@@ -23,16 +23,15 @@ from geography import MissionManager
 
 class GLWidget(QOpenGLWidget):
 
-    def __init__(self, configs):
+    def __init__(self, configs: cfg.SectionProxy):
         super().__init__()
 
-        self.configs        = configs
+        self.configs            = configs
 
-        self.shader_program = None
+        self._shader_program    = None
+        self._flight_started    = False
 
-        self.flight_started = False
-
-        self.cam            = PivotCamera(
+        self.cam                = PivotCamera(
                     pivot_point = glm.vec3(utils.parse_list(configs["cam_pivot_point"], float)),
                     tilt_deg    = configs.getfloat("cam_tilt_deg"),
                     orbit_deg   = configs.getfloat("cam_orbit_deg"),
@@ -46,14 +45,12 @@ class GLWidget(QOpenGLWidget):
         self.frustum        = Frustum(configs.getint("tile_max_z"), configs.getfloat("res_multiplier"))
         self.tile_cache     = {}
 
-        cylinder_geom       = Cylinder()
-        self.target_vao     = VAO(cylinder_geom)
-
         self.rockets        = []
         self.strips         = []
         
-        self.mission_manager    = MissionManager(configs)
         self.targets            = []
+        self.target_vao         = VAO(Cylinder())
+        self.mission_manager    = MissionManager(configs)
         for airport in self.mission_manager.get_airports():
             target          = Target(
                 vao                 = self.target_vao, 
@@ -163,7 +160,7 @@ class GLWidget(QOpenGLWidget):
 
         delta = ms / 1000.0  # Convert to seconds
 
-        if self.flight_started:
+        if self._flight_started:
             self.air_plane.update(delta)
 
         for enemy in self.enemies:
@@ -292,8 +289,8 @@ class GLWidget(QOpenGLWidget):
         else:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
-        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, np.array(self.cam.view_matrix, dtype=np.float32).T)
-        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, np.array(self.cam.projection_matrix, dtype=np.float32).T)
+        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.cam.view_matrix.to_bytes())
+        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.cam.projection_matrix.to_bytes())
         glUniform1f(self.alpha_loc, 1.0)
         
 
@@ -326,16 +323,16 @@ class GLWidget(QOpenGLWidget):
 
         # Render tiles
         for tile in self.tile_cache.values():
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(tile.model_matrix, dtype=np.float32).T)
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, tile.model_matrix.to_bytes())
             tile.render()
 
         # = Plane =
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(self.air_plane.model_matrix, dtype=np.float32).T)
+        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.air_plane.model_matrix.to_bytes())
         self.air_plane.render()
 
         # = Enemies =
         for enemy in self.enemies:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(enemy.model_matrix, dtype=np.float32).T)
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, enemy.model_matrix.to_bytes())
             enemy.render()
        
 
@@ -348,12 +345,14 @@ class GLWidget(QOpenGLWidget):
 
         # = Clouds =
         for cloud in self.clouds:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(cloud.model_matrix, dtype=np.float32).T)
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, cloud.model_matrix.to_bytes())
             cloud.render()
+
+        glm.mat4.to_bytes
 
         # = Targets =
         for target in self.targets:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(target.model_matrix, dtype=np.float32).T)
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, target.model_matrix.to_bytes())
             target.render()
 
 
@@ -362,12 +361,12 @@ class GLWidget(QOpenGLWidget):
 
         # = Rockets =
         for rocket in self.rockets:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(rocket.model_matrix, dtype=np.float32).T)
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, rocket.model_matrix.to_bytes())
             rocket.render()
 
         # = Strips =
         for strip in self.strips:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, np.array(strip.model_matrix, dtype=np.float32).T)
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, strip.model_matrix.to_bytes())
             strip.render()
 
         glEnable(GL_CULL_FACE)
@@ -414,8 +413,8 @@ class GLWidget(QOpenGLWidget):
     def delegate_key_pressed(self, event):
         key = event.key()
         if key == Qt.Key.Key_W:
-            if not self.flight_started:
-                self.flight_started = True
+            if not self._flight_started:
+                self._flight_started = True
             self.air_plane.accelerate(self.configs.getfloat("plane_gas_acc"))
         elif key == Qt.Key.Key_S:
             self.air_plane.accelerate(self.configs.getfloat("plane_brake_acc"))
