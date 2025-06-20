@@ -153,7 +153,7 @@ class GLWidget(QOpenGLWidget):
         self.elapsed_timer  = QElapsedTimer()
         self.elapsed_timer.start()
 
-        self.cam.focus(self.air_plane.position)
+        self.cam.pivot_point = self.air_plane.position
 
 
     def update_game(self):
@@ -184,14 +184,14 @@ class GLWidget(QOpenGLWidget):
 
         self.add_strip()
        
-        self.cam.focus(self.air_plane.position)
+        self.cam.pivot_point = self.air_plane.position
 
         v1          = glm.vec2(0, 1)
         plane_forw  = self.air_plane.forward
         v2          = glm.vec2(plane_forw.x, plane_forw.y)
         angle_rad   = utils.signed_angle_2d(v1, v2)
         angle_off   = glm.degrees(angle_rad - self.cam.orbit_rad)        
-        self.cam.orbit(angle_off)
+        self.cam.add_orbit(angle_off)
 
         if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
             self.mission = self.mission_manager.new_mission()
@@ -292,8 +292,8 @@ class GLWidget(QOpenGLWidget):
         else:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
-        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, np.array(self.cam.get_view_matrix(), dtype=np.float32).T)
-        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, np.array(self.cam.get_projection_matrix(), dtype=np.float32).T)
+        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, np.array(self.cam.view_matrix, dtype=np.float32).T)
+        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, np.array(self.cam.projection_matrix, dtype=np.float32).T)
         glUniform1f(self.alpha_loc, 1.0)
         
 
@@ -306,7 +306,7 @@ class GLWidget(QOpenGLWidget):
         # = Tiles =
 
         # Add missing tiles
-        tile_ids = self.frustum.cull(self.cam.get_projection_matrix() * self.cam.get_view_matrix(), self.cam.cam_pos)
+        tile_ids = self.frustum.cull(self.cam.projection_matrix * self.cam.view_matrix, self.cam.cam_pos)
         with ThreadPoolExecutor() as executor:
             futures = []
             for (x, y, z) in tile_ids:
@@ -391,7 +391,7 @@ class GLWidget(QOpenGLWidget):
 
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
-        self.cam.set_aspect(w/h)
+        self.cam.aspect = w/h
 
 
     def release(self):
@@ -434,15 +434,15 @@ class GLWidget(QOpenGLWidget):
         elif key == Qt.Key.Key_Space:
             self.shoot_rocket()
         elif key == Qt.Key.Key_PageUp:
-            self.cam.tilt(-5)
+            self.cam.add_tilt(-5)
         elif key == Qt.Key.Key_PageDown:
-            self.cam.tilt(5)
+            self.cam.add_tilt(5)
         elif key == Qt.Key.Key_Plus:
             new_cam_dist = self.cam.distance - self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
-            self.cam.zoom(new_cam_dist)
+            self.cam.distance = new_cam_dist
         elif key == Qt.Key.Key_Minus:
             new_cam_dist = self.cam.distance + self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
-            self.cam.zoom(new_cam_dist)
+            self.cam.distance = new_cam_dist
         elif key == Qt.Key.Key_Right:
             self.air_plane.add_roll(2)
         elif key == Qt.Key.Key_Left:
@@ -455,10 +455,9 @@ class GLWidget(QOpenGLWidget):
 
     def delegate_wheel_event(self, event):
 
-        sensitivity     = configs.getfloat("wheel_sensitivity")
-        delta           = -event.angleDelta().y() / 120 * sensitivity# One step = 120
-        new_cam_dist    = self.cam.distance + delta * self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
-        self.cam.zoom(new_cam_dist)
+        sensitivity         = configs.getfloat("wheel_sensitivity")
+        delta               = -event.angleDelta().y() / 120 * sensitivity# One step = 120
+        self.cam.distance   = self.cam.distance + delta * self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
 
 
     def delegate_mouse_pressed_event(self, event):
@@ -470,8 +469,8 @@ class GLWidget(QOpenGLWidget):
 
     def screen_ray(self, pos):
         x, y = pos.x(), pos.y()
-        view = self.cam.get_view_matrix()
-        proj = self.cam.get_projection_matrix()
+        view = self.cam.view_matrix
+        proj = self.cam.projection_matrix
         width, height = self.width(), self.height()
 
         # Convert to NDC
@@ -498,8 +497,8 @@ class GLWidget(QOpenGLWidget):
 
         sensitivity = 0.1
         
-        self.cam.tilt(dy * sensitivity)
-        self.cam.orbit(dx * sensitivity)
+        self.cam.add_tilt(dy * sensitivity)
+        self.cam.add_orbit(dx * sensitivity)
 
 
 

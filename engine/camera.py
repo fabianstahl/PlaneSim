@@ -20,104 +20,128 @@ class PivotCamera:
             far         : float     = 10):
         
         # Attributes for view matrix
-        self.pivot_point    = pivot_point
-        self.tilt_rad       = glm.radians(tilt_deg)
-        self.orbit_rad      = glm.radians(orbit_deg)
-        self.distance       = distance
+        self._pivot_point   = pivot_point
+        self._tilt_rad      = glm.radians(tilt_deg)
+        self._orbit_rad     = glm.radians(orbit_deg)
+        self._distance      = distance
 
         # Attributes for projection matrix
-        self.fov            = glm.radians(fov_deg)
-        self.aspect         = aspect
-        self.near           = near
-        self.far            = far
+        self._fov           = glm.radians(fov_deg)
+        self._aspect        = aspect
+        self._near          = near
+        self._far           = far
+
+        self._view_matrix:          glm.mat4    = glm.mat4(1.0)
+        self._projection_matrix:    glm.mat4    = glm.mat4(1.0)
+        self._cam_pos:              glm.vec3    = glm.vec3(0, 0, 0)    
 
         self._update_view_matrix()
-        self._update_projection_marix()
+        self._update_projection_matrix()
 
 
-    def set_aspect(self, aspect: float):
-        self.aspect = aspect
-        self._update_projection_marix()
 
+    # === Read only Properties ===
+
+    @property
+    def view_matrix(self) -> glm.mat4:
+        return self._view_matrix
+    
+
+    @property
+    def projection_matrix(self) -> glm.mat4:
+        return self._projection_matrix
+    
+
+    @property
+    def orbit_rad(self) -> float:
+        return self._orbit_rad
+    
+
+    @property
+    def tilt_rad(self) -> float:
+        return self._tilt_rad
+    
+
+    @property
+    def cam_pos(self) -> glm.vec3:
+        return self._cam_pos
+
+
+    # === Read / Write Properties ===
+
+    @property
+    def pivot_point(self) -> glm.vec3:
+        return self._pivot_point
+    
+    @pivot_point.setter
+    def pivot_point(self, pivot_point: glm.vec3):
+        self._pivot_point = pivot_point
+        self._update_view_matrix()
+
+
+    @property
+    def distance(self) -> float:
+        return self._distance
+    
+    @distance.setter
+    def distance(self, distance: float):
+        self._distance = distance
+        self._update_view_matrix()
+
+
+    @property
+    def aspect(self) -> float:
+        return self._aspect
+    
+    @aspect.setter
+    def aspect(self, aspect: float):
+        self._aspect = aspect
+        self._update_projection_matrix()
+
+
+    # === Private Methods ===
 
     def _update_view_matrix(self) -> glm.mat4:
 
         # Calculate the orbit rotation matrix
-        rotation_orbit      = glm.rotate(glm.mat4(1), self.orbit_rad, FORWARD)
+        rotation_orbit      = glm.rotate(glm.mat4(1), self._orbit_rad, FORWARD)
         new_right           = glm.vec3(rotation_orbit * glm.vec4(RIGHT, 0.0))
         new_up              = glm.vec3(rotation_orbit * glm.vec4(UP, 0.0))
 
         # Perform tilting
-        rotation_tilt       = glm.rotate(glm.mat4(1), self.tilt_rad, new_right)
+        rotation_tilt       = glm.rotate(glm.mat4(1), self._tilt_rad, new_right)
         new_up              = glm.vec3(rotation_tilt * new_up)
         new_forward         = glm.vec3(rotation_tilt * FORWARD)
 
         # Get new camera position 
-        self.cam_pos        = self.pivot_point + new_forward * self.distance
+        self._cam_pos       = self._pivot_point + new_forward * self._distance
 
         # LookAt Matrix: eye, center, up
-        self._view_matrix   = glm.lookAt(self.cam_pos, self.pivot_point, new_up)
+        self._view_matrix   = glm.lookAt(self._cam_pos, self._pivot_point, new_up)
 
 
-    def _update_projection_marix(self) -> glm.mat4:
-        self._projection_matrix = glm.perspective(self.fov, self.aspect, self.near, self.far)
+    def _update_projection_matrix(self) -> glm.mat4:
+        self._projection_matrix = glm.perspective(self._fov, self._aspect, self._near, self._far)
 
 
-    def get_view_matrix(self):
-        return self._view_matrix
-    
-
-    def get_projection_matrix(self):
-        return self._projection_matrix
-
+    # === Public Methods ===
 
     def translate(self, translation_vector: glm.vec3):
-        """Translate camera position by a vector in world space (e.g., for WASD movement)"""
-        self.pivot_point    += translation_vector
+        """Translate camera position by a vector in world space"""
+        self._pivot_point   += translation_vector
         self._update_view_matrix()
 
 
-    def focus(self, new_pivot_point: glm.vec3):
-        """
-        Move the camera such that it continues looking from the same relative position,
-        but the new pivot point becomes the specified position.
-        """
-
-        self.pivot_point    = new_pivot_point
+    def add_tilt(self, angle_offset_deg: float):
+        """Tilt the camera around its right axis, keeping the pivot point fixed."""
+        tilt_deg        = glm.degrees(self._tilt_rad) + angle_offset_deg
+        tilt_deg        = glm.clamp(tilt_deg, 0, 65)
+        self._tilt_rad  = glm.radians(tilt_deg)
         self._update_view_matrix()
 
 
-    def zoom(self, distance):
-        """
-        Zoom camera along the forward axis by a distance
-        """
-        # TODO: find out why tiles shift when zoomed out too far
-        self.distance   = distance
-
-        self._update_view_matrix()
-
-
-    def tilt(self, angle_offset_deg: float):
-        """
-        Tilt the camera around its right axis, keeping the intersection with z=0 fixed.
-        """
-
-        tilt_deg = glm.degrees(self.tilt_rad) + angle_offset_deg
-
-        if tilt_deg < 0:
-            tilt_deg = 0
-        elif tilt_deg > 65:
-            tilt_deg = 65
-
-        self.tilt_rad = glm.radians(tilt_deg)
-        self._update_view_matrix()
-
-
-    def orbit(self, angle_offset_deg: float):
-        """
-        Orbit the camera around the pivot point, keeping the intersection with z=0 fixed.
-        """
-
-        orbit_deg       = (glm.degrees(self.orbit_rad) + angle_offset_deg) % 360
-        self.orbit_rad  = glm.radians(orbit_deg)
+    def add_orbit(self, angle_offset_deg: float):
+        """Orbit the camera around the pivot point"""
+        orbit_deg       = (glm.degrees(self._orbit_rad) + angle_offset_deg) % 360
+        self._orbit_rad = glm.radians(orbit_deg)
         self._update_view_matrix()
