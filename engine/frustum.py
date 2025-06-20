@@ -1,94 +1,41 @@
 import glm
 import numpy as np
-import sys
+import geometry as geom
 
-from numba import njit
-
-def get_ray_plane_intersection(inv_viewproj, ndc_x, ndc_y):
-    # Start at near plane (NDC z = -1), homogeneous clip space
-    start = glm.vec4(ndc_x, ndc_y, -1.0, 1.0)
-    end   = glm.vec4(ndc_x, ndc_y,  1.0, 1.0)
-
-    world_start = inv_viewproj * start
-    world_end   = inv_viewproj * end
-    world_start /= world_start.w
-    world_end   /= world_end.w
-
-    direction = world_end - world_start
-    t = -world_start.z / direction.z  # intersection with z=0
-    intersection = glm.vec3(world_start) + glm.vec3(direction) * t
-    return (intersection.x, intersection.y)
-
-
-
-@njit
-def get_normals(polygon):
-    """Returns the normals (perpendicular vectors) of the polygon edges."""
-    normals = []
-    num_points = len(polygon)
-    for i in range(num_points):
-        p1 = polygon[i]
-        p2 = polygon[(i + 1) % num_points]
-        edge = p2 - p1
-        normal = np.array([-edge[1], edge[0]])  # Perpendicular to edge
-        normal = normal / np.linalg.norm(normal)
-        normals.append(normal)
-    return normals
-
-
-@njit
-def project_polygon(polygon, axis):
-    """Projects a polygon onto an axis and returns the min and max projection values."""
-    projections = np.dot(polygon, axis)
-    return projections.min(), projections.max()
-
-
-@njit
-def overlap(min_a, max_a, min_b, max_b):
-    """Returns True if the projection intervals overlap."""
-    return max_a >= min_b and max_b >= min_a
-
-
-@njit
-def test_plane_intersection_2d(points_a, points_b):
-    """Tests if two convex 2D polygons intersect."""
-    axes = get_normals(points_a) + get_normals(points_b)
-
-    for axis in axes:
-        min_a, max_a = project_polygon(points_a, axis)
-        min_b, max_b = project_polygon(points_b, axis)
-        if not overlap(min_a, max_a, min_b, max_b):
-            return False  # Found a separating axis
-
-    return True  # No separating axis found: intersection exists
+from numpy.typing import NDArray
+from typing import Set, Tuple, List
 
 
 
 class Frustum:
-    def __init__(self, max_z):
+    def __init__(self, max_z: int, res_multiplier: float):
+        self._max_z             = max_z
+        self._res_multiplier    = res_multiplier
 
-        self.max_z          = max_z
-        self.start_plane    = (-1, 1, -1, 1)
 
-
-    def cull(self, vp_matrix: glm.mat4, cam_pos: glm.vec3, z = 0):
-
+    def cull(self, vp_matrix: glm.mat4, cam_pos: glm.vec3) -> Set[Tuple[int, int, int]]:
+        """
+        Find out which (x, y, z) tiles should be drawn. 
+        Only returns tiles that are within the camera frustum. 
+        Tiles close to the camera position are subdivided, i.e. 
+        the zoom level z is increased for these tiles.
+        """
         inv_viewproj = glm.inverse(vp_matrix)
 
-        # Find frustum boundries
+        # Find frustum boundries (bl, tl, tr, br)
         frustum_points = np.array([
-            get_ray_plane_intersection(inv_viewproj, -1, -1),   # bottom-left
-            get_ray_plane_intersection(inv_viewproj, -1, 1),    # top-left
-            get_ray_plane_intersection(inv_viewproj, 1,  1),   # top-right
-            get_ray_plane_intersection(inv_viewproj, 1, -1),    # bottom-right
+            geom.ray_z_plane_intersection(inv_viewproj, -1, -1),
+            geom.ray_z_plane_intersection(inv_viewproj, -1, 1),
+            geom.ray_z_plane_intersection(inv_viewproj, 1,  1),
+            geom.ray_z_plane_intersection(inv_viewproj, 1, -1),
         ])
 
-        planes = self.test_plane(0, 0, 0, frustum_points, cam_pos)
+        planes = self._test_plane(0, 0, 0, frustum_points, cam_pos)
         #print(len(planes), " in frustum")
         return set(planes)
 
 
-    def test_plane(self, x, y, z, frustum_points, cam_pos):
+    def _test_plane(self, x: int, y: int, z: int, frustum_points: NDArray[np.float32], cam_pos: glm.vec3) -> List[Tuple[int, int, int]]:
 
         results = []
 
@@ -101,29 +48,28 @@ class Frustum:
         tile_points = np.array([(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)])
 
         # Test if Tile is in camera frustum
-        if not test_plane_intersection_2d(tile_points, frustum_points):
+        if not geom.test_plane_intersection_2d(tile_points, frustum_points):
             return []
 
-        # Check 1: If the camera is lover than the tile size / 2 -> subdivide
-        elevation_treshold  = tile_size / 2
-        if cam_pos.z > elevation_treshold:
+        # Check 1: Don't subdivide if the camera is above the tile cube
+        if cam_pos.z > tile_size:
             return [(x, y, z)]
 
-        # Check 2: If the distance of the camera to the center is 
-        center              = glm.vec3(min_x + tile_size / 2, min_y + tile_size / 2, 0)
-        length              = glm.length(cam_pos - center)
-        threshold           = glm.sqrt(glm.sqrt(tile_size/2**2 + tile_size/2**2)**2 + tile_size/2**2)
-        if length > threshold:
+        # Check 2: Max z Level reached
+        if z == self._max_z:
+            return [(x, y, z)]
+
+        # Check 3: Don't subdivide if distance from camera to the tile bottom center is larger than the tile size
+        center          = glm.vec3(min_x + tile_size / 2, min_y + tile_size / 2, 0)
+        length          = glm.length(cam_pos - center)
+        dist_treshold   = self._res_multiplier * tile_size
+        if length > dist_treshold:
             return [(x, y, z)]
         
-        # Check 3: Max z Level reached
-        if z == self.max_z:
-            return [(x, y, z)]
-
         # Subdivide otherwise
         for x_ in ((2 * x, 2 * x + 1)):
             for y_ in ((2 * y, 2 * y + 1)):
-                sub_planes = self.test_plane(x_, y_, z+1, frustum_points, cam_pos)
+                sub_planes = self._test_plane(x_, y_, z+1, frustum_points, cam_pos)
                 results.extend(sub_planes)
         
         return results

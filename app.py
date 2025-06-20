@@ -43,7 +43,7 @@ class GLWidget(QOpenGLWidget):
                     far         = configs.getfloat("cam_far")
         )
         
-        self.frustum        = Frustum(configs.getint("tile_max_z"))
+        self.frustum        = Frustum(configs.getint("tile_max_z"), configs.getfloat("res_multiplier"))
         self.tile_cache     = {}
 
         cylinder_geom       = Cylinder()
