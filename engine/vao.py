@@ -17,31 +17,31 @@ class VAO:
 
         assert face_indices.shape == uv_face_indices.shape, "Mismatched face shapes"
 
-        self.vertex_data = []
+        vertex_data = []
         for f_idx, uv_idx in zip(face_indices.flatten(), uv_face_indices.flatten()):
             pos = vertices[f_idx]
-            uv = uv_vertices[uv_idx]
-            self.vertex_data.append(np.concatenate([pos, uv]))
+            uv  = uv_vertices[uv_idx]
+            vertex_data.append(np.concatenate([pos, uv]))
 
-        self.vertex_data    = np.array(self.vertex_data, dtype=np.float32)
-        self.vertex_count   = len(self.vertex_data)
+        self._vertex_data   = np.array(vertex_data, dtype=np.float32)
+        self._vertex_count  = len(self._vertex_data)
 
 
     def initializeGL(self):
-        self.vao = glGenVertexArrays(1)
-        self.vbo = glGenBuffers(1)
+        self._vao = glGenVertexArrays(1)
+        self._vbo = glGenBuffers(1)
 
-        glBindVertexArray(self.vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
-        glBufferData(GL_ARRAY_BUFFER, self.vertex_data.nbytes, self.vertex_data, GL_STATIC_DRAW)
+        glBindVertexArray(self._vao)
+        glBindBuffer(GL_ARRAY_BUFFER, self._vbo)
+        glBufferData(GL_ARRAY_BUFFER, self._vertex_data.nbytes, self._vertex_data, GL_STATIC_DRAW)
 
-        stride = self.vertex_data.shape[1] * self.vertex_data.itemsize
+        stride = self._vertex_data.shape[1] * self._vertex_data.itemsize
         offset = 0
 
         # position (vec3)
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(offset))
         glEnableVertexAttribArray(0)
-        offset += 3 * self.vertex_data.itemsize
+        offset += 3 * self._vertex_data.itemsize
 
         # texcoords (vec2)
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(offset))
@@ -51,13 +51,13 @@ class VAO:
 
 
     def use(self):
-        glBindVertexArray(self.vao)
+        glBindVertexArray(self._vao)
 
 
     def render(self):
-        glDrawArrays(GL_TRIANGLES, 0, self.vertex_count)
+        glDrawArrays(GL_TRIANGLES, 0, self._vertex_count)
 
 
     def release(self):
-        glDeleteVertexArrays(1, [self.vao])
-        glDeleteBuffers(1, [self.vbo])
+        glDeleteVertexArrays(1, [self._vao])
+        glDeleteBuffers(1, [self._vbo])
