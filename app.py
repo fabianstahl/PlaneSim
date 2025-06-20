@@ -174,12 +174,12 @@ class GLWidget(QOpenGLWidget):
 
         for rocket in self.rockets:
             rocket.update()
-            if rocket.is_destroyable():
+            if rocket.is_expired():
                 self.rockets.remove(rocket)
 
         for strip in self.strips:
             strip.update()
-            if strip.is_destroyable():
+            if strip.is_expired():
                 self.strips.remove(strip)
 
         self.add_strip()
@@ -187,7 +187,7 @@ class GLWidget(QOpenGLWidget):
         self.cam.focus(self.air_plane.position)
 
         v1          = glm.vec2(0, 1)
-        plane_forw  = self.air_plane.get_forward()
+        plane_forw  = self.air_plane.forward
         v2          = glm.vec2(plane_forw.x, plane_forw.y)
         angle_rad   = utils.signed_angle_2d(v1, v2)
         angle_off   = glm.degrees(angle_rad - self.cam.orbit_rad)        
@@ -252,11 +252,11 @@ class GLWidget(QOpenGLWidget):
             position            = glm.vec3(*self.air_plane.position),
             scale               = self.configs.getfloat("plane_scale"),
             texture_path        = self.configs.get("rocket_tex_path"), 
-            forward             = self.air_plane.get_forward(), 
+            forward             = self.air_plane.forward, 
             rocket_speed        = self.configs.getfloat("rocket_speed"),
             life_time           = self.configs.getint("rocket_life_time")
         )
-        rocket.set_orientation(self.air_plane.orientation)
+        rocket.orientation = self.air_plane.orientation
         
         rocket.initializeGL()
 
@@ -272,7 +272,7 @@ class GLWidget(QOpenGLWidget):
             texture_path        = self.configs.get("strip_tex_path"), 
             life_time           = self.configs.getint("strip_life_time")
         )
-        strip.set_orientation(self.air_plane.orientation)
+        strip.orientation = self.air_plane.orientation
 
         
         strip.initializeGL()

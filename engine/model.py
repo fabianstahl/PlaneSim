@@ -1,66 +1,108 @@
 from engine.vao import VAO
 from engine.texture import Texture
-import glm
-import numpy as np
+from pyglm import glm
+from typing import Any
 
-# Camera Systemr elative to plane
+
+# Camera Systemr relative to plane
 RIGHT       = glm.vec3(1, 0, 0)     # pitch
 FORWARD     = glm.vec3(0, 1, 0)     # roll
 UP          = glm.vec3(0, 0, 1)    # yaw
 
 class Model:
 
-    def __init__(self, vao, position, scale, texture_path, yaw_deg = 0, pitch_deg = 0, roll_deg = 0):
-        self.vao            = vao
-        self.position       = position
-        self.scale          = scale
-        self.model_matrix   = glm.mat4(1.0)
-        self.orientation    = glm.quat()
+    def __init__(self, 
+                vao:            VAO,
+                position:       glm.vec3, 
+                scale:          glm.vec3 | float, 
+                texture_path:   str, 
+                yaw_deg:        float               = 0, 
+                pitch_deg:      float               = 0, 
+                roll_deg:       float               = 0):
+        self._vao           = vao
+        self._position      = position
+        self._scale         = glm.vec3(scale)
+        self._texture_path  = texture_path
+
+        self._texture:      Texture     = Texture(texture_path)
+        self._model_matrix: glm.mat4    = glm.mat4(1.0)
+        self._orientation:  glm.quat    = glm.quat()
 
         self.add_yaw(yaw_deg)
         self.add_pitch(pitch_deg)
         self.add_roll(roll_deg)
 
-        self.texture        = Texture(texture_path)
 
+
+
+    # === Read only Properties ===
+
+    @property
+    def model_matrix(self) -> glm.mat4:
+        return self._model_matrix
+
+
+    # === Read / Write Properties ===
+
+    @property
+    def position(self) -> glm.vec3:
+        return self._position
+
+    @position.setter
+    def position(self, position: glm.vec3):
+        self._position = position
+        self._update_model_matrix()
+
+
+    @property
+    def scale(self) -> glm.vec3:
+        return self._scale
+
+    @scale.setter
+    def scale(self, scale: glm.vec3 | float):
+        self._scale = glm.vec3(scale)
+        self._update_model_matrix()
+    
+
+    @property
+    def orientation(self) -> glm.quat:
+        return self._orientation
+    
+    @orientation.setter
+    def orientation(self, orientation: glm.quat):
+        self._orientation   = orientation
+        self._update_model_matrix()
+
+
+    # === Private Methods ===
 
     def _update_model_matrix(self):
-        
-        identity        = glm.mat4(1.0)
-
-        # Translation
-        model_trans     = glm.translate(identity, self.position)
-
-        # Scale
-        model_scale     = glm.scale(identity, glm.vec3(self.scale))
-
-        #self.model_matrix = model_trans * model_roll * model_pitch * model_yaw * model_scale * model
-        self.model_matrix = model_trans * glm.mat4_cast(self.orientation) * model_scale * identity
+        identity            = glm.mat4(1.0)
+        model_trans         = glm.translate(identity, self._position)
+        model_scale         = glm.scale(identity, self._scale)
+        self._model_matrix  = model_trans * glm.mat4_cast(self._orientation) * model_scale * identity
 
 
-    def add_yaw(self, yaw_deg):
-        yaw_rad     = glm.radians(yaw_deg)
-        q_delta     = glm.angleAxis(yaw_rad, self.orientation * UP)
-        self.orientation = q_delta * self.orientation
+    # === Public Methods ===
+
+    def add_yaw(self, yaw_deg: float):
+        yaw_rad             = glm.radians(yaw_deg)
+        q_delta             = glm.angleAxis(yaw_rad, self._orientation * UP)
+        self._orientation   = q_delta * self._orientation
         self._update_model_matrix()
 
 
-    def add_pitch(self, pitch_deg):
-        pitch_rad   = glm.radians(pitch_deg) 
-        q_delta     = glm.angleAxis(pitch_rad, self.orientation * RIGHT)
-        self.orientation = q_delta * self.orientation
+    def add_pitch(self, pitch_deg: float):
+        pitch_rad           = glm.radians(pitch_deg) 
+        q_delta             = glm.angleAxis(pitch_rad, self._orientation * RIGHT)
+        self._orientation   = q_delta * self._orientation
         self._update_model_matrix()
 
 
-    def add_roll(self, roll_deg):
-        roll_rad    = glm.radians(roll_deg)
-        q_delta     = glm.angleAxis(roll_rad, self.orientation * FORWARD)
-        self.orientation = q_delta * self.orientation
-        self._update_model_matrix()
-
-
-    def set_orientation(self, orientation):
-        self.orientation = orientation
+    def add_roll(self, roll_deg: float):
+        roll_rad            = glm.radians(roll_deg)
+        q_delta             = glm.angleAxis(roll_rad, self._orientation * FORWARD)
+        self._orientation   = q_delta * self._orientation
         self._update_model_matrix()
 
 
@@ -70,128 +112,127 @@ class Model:
 
 
     def initializeGL(self):
-        self.texture.initializeGL()
+        self._texture.initializeGL()
 
 
     def render(self):
-        self.texture.use()
-        self.vao.use()
-        self.vao.render()
+        self._texture.use()
+        self._vao.use()
+        self._vao.render()
 
 
     def release(self):
-        self.vao.release()
-        self.texture.release()
+        self._vao.release()
+        self._texture.release()
 
     
-    def translate(self, offset):
-        self.position += offset
+    def translate(self, offset: glm.vec3 | float):
+        self._position += offset
 
-        if self.position.z < 0:
-            self.position.z = 0
+        if self._position.z < 0:
+            self._position.z = 0
 
 
 
 class Target(Model):
 
-    def __init__(self, rotation_speed, *args, **kwargs):
+    def __init__(self, rotation_speed: float, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
-        self.rotation_speed     = rotation_speed
+        self._rotation_speed     = rotation_speed
 
 
     def update(self):
-        self.add_yaw(self.rotation_speed)
+        self.add_yaw(self._rotation_speed)
         self._update_model_matrix()
-
-
-
-class Rocket(Model):
-
-    def __init__(self, rocket_speed, forward, life_time, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.rocket_speed   = rocket_speed
-        self.forward        = forward
-        self.life_time      = life_time
-        self.no_updates     = 0
-
-
-    def update(self):
-        self.position       += self.forward * self.rocket_speed
-        self.no_updates     += 1
-        self._update_model_matrix()
-
-    
-    def is_destroyable(self):
-        return self.no_updates >= self.life_time
-    
-
-
-class Strip(Model):
-
-    def __init__(self, life_time, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.life_time      = life_time
-        self.no_updates     = 0
-
-
-    def update(self):
-        self.no_updates     += 1
-        self._update_model_matrix()
-
-    
-    def is_destroyable(self):
-        return self.no_updates >= self.life_time
 
 
 
 class Airplane(Model):
 
-    def __init__(self, min_vel, max_vel, *args, **kwargs):
+    def __init__(self, min_vel: float, max_vel: float, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         
-        self.velocity       = 0
-        self.acceleration   = 0
-        self.min_vel        = min_vel
-        self.max_vel        = max_vel
+        self._min_vel       = min_vel
+        self._max_vel       = max_vel
+
+        self._velocity:     float   = 0
+        self._acceleration: float   = 0
 
 
-    def get_forward(self):
-        return glm.normalize(glm.vec3(self.model_matrix[1]))
+    @property
+    def forward(self) -> glm.vec3:
+        return glm.normalize(glm.vec3(self._model_matrix[1]))
 
 
-    def accelerate(self, acceleration):
-        self.acceleration = acceleration
+    def accelerate(self, acceleration: float):
+        self._acceleration = acceleration
 
 
-    def update(self, delta):
+    def update(self, delta: float):
         
         # Integrate acceleration to velocity
-        self.velocity += self.acceleration * delta
+        self._velocity  += self._acceleration * delta
 
         # Optional: clamp max velocity
-        if self.velocity > self.max_vel:
-            self.velocity = self.max_vel
-        elif self.velocity < self.min_vel:
-            self.velocity = self.min_vel  # Prevent moving backward if you want
+        self._velocity  = glm.clamp(self._velocity, self._min_vel, self._max_vel)
 
         # Integrate velocity to position
-        forward        = glm.normalize(glm.vec3(self.model_matrix[1]))
-        self.position += forward * self.velocity * delta
+        self._position += self.forward * self._velocity * delta
 
-        if self.position.z < 0:
-            self.position.z = 0
+        if self._position.z < 0:
+            self._position.z = 0
 
         self._update_model_matrix()
 
 
 
-class MapTile(Model):
+class ExpirableModel(Model):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, life_time: int, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._life_time     = life_time
+        
+        self._no_updates: int = 0
+
+
+    def update(self):
+        self._no_updates    += 1
+        self._update_model_matrix()
+
+
+    def is_expired(self) -> bool:
+        return self._no_updates >= self._life_time
+
+
+
+class Rocket(ExpirableModel):
+
+    def __init__(self, rocket_speed: float, forward: glm.vec3, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._rocket_speed  = rocket_speed
+        self._forward       = forward
+        
+
+    def update(self):
+        self._position      += self._forward * self._rocket_speed
+        super().update()
+
+
+
+class Strip(ExpirableModel):
+
+    def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
 
 
-    def prepare_tile(x, y, z, vao):
+
+class MapTile(Model):
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+
+
+    def prepare_tile(x: int, y: int, z: int, vao: VAO):
         center      = 2**z // 2
         scale       = 2 / 2**z
         x_pos       = 2 * (-x + center - 0.5) / 2**z
