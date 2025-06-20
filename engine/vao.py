@@ -10,10 +10,10 @@ class VAO:
         Assumes face_indices and uv_face_indices have same shape.
         """
 
-        vertices        = geometry.get_vertices()
-        uv_vertices     = geometry.get_uv_vertices()    
-        face_indices    = geometry.get_vertex_indices()
-        uv_face_indices = geometry.get_uv_indices()
+        vertices        = geometry.vertices
+        uv_vertices     = geometry.uv_vertices   
+        face_indices    = geometry.vertex_indices
+        uv_face_indices = geometry.uv_indices
 
         assert face_indices.shape == uv_face_indices.shape, "Mismatched face shapes"
 

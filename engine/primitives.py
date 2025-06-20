@@ -1,164 +1,152 @@
 import numpy as np
-from abc import ABC, abstractmethod
-from typing import Sequence, List
 from parser import OBJ_Parser
+from numpy.typing import NDArray
 
 
-class Primitive(ABC):
-    @abstractmethod
-    def get_vertices(self) -> Sequence[float]:
-        pass
+class Primitive():
 
-    @abstractmethod
-    def get_vertex_indices(self) -> Sequence[int]:
-        pass
+    def __init__(self):
+        self._vertices          = None
+        self._vertex_indices    = None
+        self._uv_vertices       = None
+        self._uv_indices        = None
 
-    @abstractmethod
-    def get_uv_vertices(self) -> Sequence[int]:
-        pass
+    @property
+    def vertices(self) -> NDArray[np.float32] | None:
+        return self._vertices
+    
+    @property
+    def vertex_indices(self) -> NDArray[np.uint32] | None:
+        return self._vertex_indices
 
-    @abstractmethod
-    def get_uv_indices(self) -> Sequence[int]:
-        pass
+    @property
+    def uv_vertices(self) -> NDArray[np.float32] | None:
+        return self._uv_vertices
+    
+    @property
+    def uv_indices(self) -> NDArray[np.uint32] | None:
+        return self._uv_indices
+    
 
 
 class Plane(Primitive):
     
     def __init__(self):
-        self.vertices = np.array([
-            # positions       # texture coords
-            [-0.5,  0.5, 0.0],  # top-left
-            [-0.5, -0.5, 0.0],  # bottom-left
-            [ 0.5, -0.5, 0.0],  # bottom-right
-            [ 0.5,  0.5, 0.0],  # top-right
+        super().__init__()
+
+        self._vertices      = np.array([
+            # [tl, bl, br, tr]
+            [-0.5,  0.5, 0.0],
+            [-0.5, -0.5, 0.0],
+            [ 0.5, -0.5, 0.0],
+            [ 0.5,  0.5, 0.0],
         ], dtype=np.float32)
 
-        self.indices = np.array([
+        self._uv_indices   = self._vertex_indices = np.array([
             0, 1, 2,
             0, 2, 3
         ], dtype=np.uint32)
 
-        self.uv_positions = np.array([
-            # positions       # texture coords
-            [0.0, 1.0],  # top-left
-            [0.0, 0.0],  # bottom-left
-            [1.0, 0.0],  # bottom-right
-            [1.0, 1.0],  # top-right
+        self._uv_vertices  = np.array([
+            # [tl, bl, br, tr]
+            [0.0, 1.0],
+            [0.0, 0.0],
+            [1.0, 0.0], 
+            [1.0, 1.0],
         ], dtype=np.float32)
 
-    
-    def get_vertices(self):
-        return self.vertices
-    
-    def get_vertex_indices(self):
-        return self.indices
-    
-    def get_uv_vertices(self):
-        return self.uv_positions
 
-    def get_uv_indices(self):
-        return self.indices
 
 
 class Cylinder(Primitive):
     def __init__(self, segments: int = 20):
-        self.segments       = segments
-        self.vertices       = []
-        self.indices        = []
-        self.uv_vertices    = []
-        self.uv_indices     = []
+        super().__init__()
+
+        self._segments      = segments
         self._generate_geometry()
 
 
     def _generate_geometry(self):
-        
-        angle_step = 2 * np.pi / self.segments
+        vertices    = []
+        indices     = []
+        uv_vertices = []
+        uv_indices  = []
 
+        angle_step  = 2 * np.pi / self._segments
         top_z       = 0.5
         bottom_z    = -0.5
+        u_step      = 1.0 / self._segments
 
-
-        # --- Side circle vertices ---
-        u_step                  = 1.0 / self.segments
-        for i in range(self.segments):
-            u_start = i * u_step
-            self.uv_vertices.append([u_start, 0.0])
-            self.uv_vertices.append([u_start, 1.0])
-        self.uv_vertices.append([1.0, 0.0])
-        self.uv_vertices.append([1.0, 1.0])
-
-
+        # Generate vertex positions
         top_circle_indices      = []
         bottom_circle_indices   = []
-        for i in range(self.segments):
-            angle = i * angle_step
-            x = 0.5 * np.cos(angle)
-            y = 0.5 * np.sin(angle)
+        for i in range(self._segments):
+            angle   = i * angle_step
+            x       = 0.5 * np.cos(angle)
+            y       = 0.5 * np.sin(angle)
 
-            # Top edge vertex
-            self.vertices.append([x, y, top_z])
+            # Top
+            vertices.append([x, y, top_z])
             top_circle_indices.append(i * 2)
 
-            # Bottom edge vertex
-            self.vertices.append([x, y, bottom_z])
+            # Bottom
+            vertices.append([x, y, bottom_z])
             bottom_circle_indices.append(i * 2 + 1)
-        
-            
-        # --- Side indices (as quads split into triangles) ---
-        for i in range(self.segments):
-            next_i = (i + 1) % self.segments
 
+        # Generate uv positions
+        for i in range(self._segments):
+            u_start = i * u_step
+            uv_vertices.append([u_start, 0.0])
+            uv_vertices.append([u_start, 1.0])
+        uv_vertices.append([1.0, 0.0])
+        uv_vertices.append([1.0, 1.0])      
+            
+        # Generate faces
+        for i in range(self._segments):
+            next_i          = (i + 1) % self._segments
             top_current     = top_circle_indices[i]
             top_next        = top_circle_indices[next_i]
             bottom_current  = bottom_circle_indices[i]
             bottom_next     = bottom_circle_indices[next_i]
 
             # First triangle
-            self.indices.extend([top_current, bottom_current, top_next])
-            self.uv_indices.extend([1 + (i*2), (i*2), 3 + (i*2)])
+            indices.extend([top_current, bottom_current, top_next])
+            uv_indices.extend([1 + (i*2), (i*2), 3 + (i*2)])
             
             # Second triangle
-            self.indices.extend([top_next, bottom_current, bottom_next])
-            self.uv_indices.extend([3 + (i*2), (i*2), 2 + (i*2)])
+            indices.extend([top_next, bottom_current, bottom_next])
+            uv_indices.extend([3 + (i*2), (i*2), 2 + (i*2)])
 
-
-
-    def get_vertices(self):
-        return np.array(self.vertices, dtype=np.float32)
-
-    def get_vertex_indices(self):
-        return np.array(self.indices, dtype=np.uint32)
-    
-    def get_uv_vertices(self):
-        return np.array(self.uv_vertices, dtype=np.float32)
-
-    def get_uv_indices(self):
-        return np.array(self.uv_indices, dtype=np.uint32)
-    
-
+        self._vertices          = np.array(vertices, dtype=np.float32)
+        self._vertex_indices    = np.array(indices, dtype=np.uint32)
+        self._uv_vertices       = np.array(uv_vertices, dtype=np.float32)
+        self._uv_indices        = np.array(uv_indices, dtype=np.uint32)
 
 
 
 class Sphere(Primitive):
 
     def __init__(self, lat_divs: int = 4, lon_divs: int = 8):
-        self.lat_divs = lat_divs
-        self.lon_divs = lon_divs
-        self.vertices = []
-        self.uvs = []
-        self.indices = []
+        super().__init__()
 
-        self._generate()
+        self._lat_divs = lat_divs
+        self._lon_divs = lon_divs
+        self._generate_geometry()
 
 
-    def _generate(self):
-        for i in range(self.lat_divs + 1):
-            theta = np.pi * i / self.lat_divs
-            sin_theta = np.sin(theta)
-            cos_theta = np.cos(theta)
+    def _generate_geometry(self):
 
-            for j in range(self.lon_divs + 1):
-                phi = 2 * np.pi * j / self.lon_divs
+        vertices    = []
+        indices     = []
+        uv_vertices = []
+
+        for i in range(self._lat_divs + 1):
+            theta       = np.pi * i / self._lat_divs
+            sin_theta   = np.sin(theta)
+            cos_theta   = np.cos(theta)
+
+            for j in range(self._lon_divs + 1):
+                phi     = 2 * np.pi * j / self._lon_divs
                 sin_phi = np.sin(phi)
                 cos_phi = np.cos(phi)
 
@@ -166,95 +154,70 @@ class Sphere(Primitive):
                 y = cos_theta * 0.5
                 z = sin_theta * sin_phi * 0.5
 
-                u = j / self.lon_divs
-                v = i / self.lat_divs
+                u = j / self._lon_divs
+                v = i / self._lat_divs
 
-                self.vertices.extend([x, z, y])
-                self.uvs.append([u, v])
+                vertices.extend([x, z, y])
+                uv_vertices.append([u, v])
 
-        for i in range(self.lat_divs):
-            for j in range(self.lon_divs):
-                first = i * (self.lon_divs + 1) + j
-                second = first + self.lon_divs + 1
+        for i in range(self._lat_divs):
+            for j in range(self._lon_divs):
+                first = i * (self._lon_divs + 1) + j
+                second = first + self._lon_divs + 1
 
-                self.indices.extend([first, second, first + 1])
-                self.indices.extend([second, second + 1, first + 1])
+                indices.extend([first, second, first + 1])
+                indices.extend([second, second + 1, first + 1])
 
+        self._vertices          = np.array(vertices, dtype=np.float32)
+        self._vertex_indices    = np.array(indices, dtype=np.uint32)
+        self._uv_vertices       = np.array(uv_vertices, dtype=np.float32)
+        self._uv_indices        = np.array(indices, dtype=np.uint32)
 
-    def get_vertices(self):
-        return np.array(self.vertices, dtype=np.float32)
-
-    def get_vertex_indices(self):
-        return np.array(self.indices, dtype=np.uint32)
-    
-    def get_uv_vertices(self):
-        return np.array(self.uvs, dtype=np.float32)
-
-    def get_uv_indices(self):
-        return np.array(self.indices, dtype=np.uint32)
-    
-    
-
+   
 
 class Cloud(Primitive):
 
-    def __init__(self, min_spheres, max_spheres, min_radius, max_radius, max_offset_xy, max_offset_z):
+    def __init__(self, min_spheres: int, max_spheres: int, min_radius: float, max_radius: float, max_offset_xy: float, max_offset_z: float):
+        super().__init__()
 
         no_spheres  = np.random.randint(min_spheres, max_spheres)
         radius      = np.random.random(no_spheres) / (max_radius - min_radius) + min_radius
         offset      = np.random.random((no_spheres, 3)) * np.array([max_offset_xy, max_offset_xy, max_offset_z])
 
-
-        self.vertices = []
-        self.uvs = []
-        self.indices = []
+        vertices    = []
+        indices     = []
+        uv_vertices = []
 
         sphere = Sphere()
 
         for i in range(no_spheres):
-            vertices = np.reshape(sphere.get_vertices(), (-1, 3)) * radius[i] + offset[i]
-            self.vertices.extend(vertices)
+            vert = np.reshape(sphere.vertices, (-1, 3)) * radius[i] + offset[i]
+            vertices.extend(vert)
+            uv_vertices.extend(sphere.uv_vertices)
+            indices.extend(len(vert) * i + sphere.vertex_indices)
 
-            self.uvs.extend(sphere.get_uv_vertices())
+        self._vertices          = np.array(vertices, dtype=np.float32)
+        self._vertex_indices    = np.array(indices, dtype=np.uint32)
+        self._uv_vertices       = np.array(uv_vertices, dtype=np.float32)
+        self._uv_indices        = np.array(indices, dtype=np.uint32)
 
-            self.indices.extend(len(vertices) * i + sphere.get_vertex_indices() )
-
-
-    def get_vertices(self):
-        return np.array(self.vertices, dtype=np.float32)
-
-    def get_vertex_indices(self):
-        return np.array(self.indices, dtype=np.uint32)
-    
-    def get_uv_vertices(self):
-        return np.array(self.uvs, dtype=np.float32)
-
-    def get_uv_indices(self):
-        return np.array(self.indices, dtype=np.uint32)
-    
 
 
 class OBJ(Primitive):
 
     def __init__(self, obj_path):
+        super().__init__()
         
-        parser = OBJ_Parser(obj_path)
+        parser  = OBJ_Parser(obj_path)
 
-        self.vertex_positions, self.vertex_indices  = parser.get_vertex_data()
-        self.uv_positions, self.uv_indices          = parser.get_uv_data()
+        vertices, vertex_indices    = parser.get_vertex_data()
+        uv_vertices, uv_indices     = parser.get_uv_data()
 
         # Rotate according to the simulator geography coordinate system
-        self.vertex_positions       = self.vertex_positions[:, [1, 0, 2]]   # (x, y) -> (y, x)
-        self.vertex_positions[:,1] *= -1                                    # (x) -> (-x)
+        vertices        = vertices[:, [1, 0, 2]]      # (x, y) -> (y, x)
+        vertices[:,1]   *= -1                         # (x) -> (-x)
 
-    def get_vertices(self):
-        return self.vertex_positions
-
-    def get_vertex_indices(self):
-        return self.vertex_indices
-
-    def get_uv_vertices(self):
-        return self.uv_positions
-
-    def get_uv_indices(self):
-        return self.uv_indices
+        self._vertices          = np.array(vertices, dtype=np.float32)
+        self._vertex_indices    = np.array(vertex_indices, dtype=np.uint32)
+        self._uv_vertices       = np.array(uv_vertices, dtype=np.float32)
+        self._uv_indices        = np.array(uv_indices, dtype=np.uint32)
