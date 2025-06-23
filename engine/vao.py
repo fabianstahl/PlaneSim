@@ -25,6 +25,12 @@ class VAO:
 
         self._vertex_data   = np.array(vertex_data, dtype=np.float32)
         self._vertex_count  = len(self._vertex_data)
+        self._initialized   = False
+
+
+    @property
+    def initialized(self) -> bool:
+        return self._initialized
 
 
     def initializeGL(self):
@@ -48,6 +54,8 @@ class VAO:
         glEnableVertexAttribArray(1)
 
         glBindVertexArray(0)
+
+        self._initialized = True
 
 
     def use(self):

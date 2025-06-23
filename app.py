@@ -4,382 +4,168 @@ import glm
 import configparser as cfg
 import utils
 import numpy as np
+from typing import Tuple
 
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtGui import QSurfaceFormat, QPainter, QColor, QFont
 from PyQt6.QtCore import QTimer, Qt, QElapsedTimer
 from OpenGL.GL import *
-from concurrent.futures import ThreadPoolExecutor
 
 from engine.shader import Shader, Program
-from engine.camera import PivotCamera
-from engine.model import MapTile, Airplane, Model, Target, Rocket, Strip
-from engine.frustum import Frustum
-from engine.vao import VAO
-from engine.primitives import Plane, Cylinder, Cloud, OBJ
-from geography import MissionManager
+from engine.game_logic import GameLogic
+import geometry as geom
 
+RENDER_MODES = {0: GL_POINT, 1:GL_LINE, 2:GL_FILL}
 
 class GLWidget(QOpenGLWidget):
 
     def __init__(self, configs: cfg.SectionProxy):
         super().__init__()
 
-        self.configs            = configs
+        self.configs        = configs
+        self.program        = None
 
-        self._shader_program    = None
-        self._flight_started    = False
-
-        self.cam                = PivotCamera(
-                    pivot_point = glm.vec3(utils.parse_list(configs["cam_pivot_point"], float)),
-                    tilt_deg    = configs.getfloat("cam_tilt_deg"),
-                    orbit_deg   = configs.getfloat("cam_orbit_deg"),
-                    distance    = configs.getfloat("cam_distance"),
-                    fov_deg     = configs.getfloat("cam_fov"), 
-                    aspect      = configs.getint("window_width") / configs.getint("window_height"), 
-                    near        = configs.getfloat("cam_near"), 
-                    far         = configs.getfloat("cam_far")
-        )
-        
-        self.frustum        = Frustum(configs.getint("tile_max_z"), configs.getfloat("res_multiplier"))
-        self.tile_cache     = {}
-
-        self.rockets        = []
-        self.strips         = []
-        
-        self.targets            = []
-        self.target_vao         = VAO(Cylinder())
-        self.mission_manager    = MissionManager(configs)
-        for airport in self.mission_manager.get_airports():
-            target          = Target(
-                vao                 = self.target_vao, 
-                position            = glm.vec3(*airport.position, configs.getfloat("target_height") / 2),
-                scale               = glm.vec3(configs.getfloat("target_radius"), configs.getfloat("target_radius"), configs.getfloat("target_height")),
-                texture_path        = configs.get("target_tex_path"),
-                rotation_speed      = configs.getfloat("target_rot_speed")
-            )
-            self.targets.append(target)
-
-        self.mission        = self.mission_manager.new_mission()
-        print("New Mission: Reach '{}, {}'".format(self.mission.target.name, self.mission.target.country))
-
-        plane_geom          = Plane()
-        self.tile_vao       = VAO(plane_geom)
-
-        air_plane_geom      = OBJ(configs.get("plane_obj_path"))
-        self.air_plane_vao  = VAO(air_plane_geom)
-        plane_position      = self.mission_manager.airport_manager.position_by_name(configs.get("start_airport"))
-        self.air_plane          = Airplane(
-            vao                 = self.air_plane_vao, 
-            position            = glm.vec3(*plane_position, configs.getfloat("plane_init_height")),
-            scale               = configs.getfloat("plane_scale"),
-            texture_path        = configs.get("plane_tex_path"), 
-            yaw_deg             = configs.getfloat("plane_rot"), 
-            min_vel             = configs.getfloat("plane_min_vel"),
-            max_vel             = configs.getfloat("plane_max_vel")
-        )
-
-        self.enemies    = []
-        rand_pos        = np.random.random((configs.getint("no_enemies"), 2)) * 2 - 1
-        rand_rot        = np.random.randint(0, 356, configs.getint("no_enemies"))
-        for i in range(configs.getint("no_enemies")):
-            enemy       = Airplane(
-                vao             = self.air_plane_vao, 
-                position        = glm.vec3(*rand_pos[i], configs.getfloat("enemy_height")),
-                scale           = configs.getfloat("enemy_scale"),
-                texture_path    = configs.get("plane_tex_path"),
-                yaw_deg         = rand_rot[i], 
-                min_vel         = configs.getfloat("plane_min_vel"),
-                max_vel         = configs.getfloat("plane_max_vel")
-            )
-            self.enemies.append(enemy)
-
-        self.clouds     = []
-        self.cloud_vaos = []
-
-        rand_pos_xy     = np.random.random((configs.getint("no_white_clouds"), 2)) * 2 - 1
-        rand_pos_z      = np.random.random(configs.getint("no_white_clouds")) * configs.getfloat("cloud_max_height")
-        for i in range(configs.getint("no_white_clouds")):
-            clouds_geom     = Cloud(self.configs.getint("cloud_min_spheres"), 
-                                    self.configs.getint("cloud_max_spheres"), 
-                                    self.configs.getfloat("cloud_min_rad"), 
-                                    self.configs.getfloat("cloud_max_rad"), 
-                                    self.configs.getfloat("cloud_max_off_xy"), 
-                                    self.configs.getfloat("cloud_max_off_z"))
-            cloud_vao       = VAO(clouds_geom)
-            self.cloud_vaos.append(cloud_vao)
-
-            cloud           = Model(
-                vao                 = cloud_vao, 
-                position            = glm.vec3(*rand_pos_xy[i], rand_pos_z[i]),
-                scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
-                texture_path        = configs.get("cloud_tex_white"), 
-                yaw_deg             = 0
-            )
-            self.clouds.append(cloud)
-
-        rand_pos_xy     = np.random.random((configs.getint("no_black_clouds"), 2)) * 2 - 1
-        rand_pos_z      = np.random.random(configs.getint("no_black_clouds")) * configs.getfloat("cloud_max_height")
-        for i in range(configs.getint("no_black_clouds")):
-            clouds_geom     = Cloud(self.configs.getint("cloud_min_spheres"), 
-                                    self.configs.getint("cloud_max_spheres"), 
-                                    self.configs.getfloat("cloud_min_rad"), 
-                                    self.configs.getfloat("cloud_max_rad"), 
-                                    self.configs.getfloat("cloud_max_off_xy"), 
-                                    self.configs.getfloat("cloud_max_off_z"))
-            cloud_vao       = VAO(clouds_geom)
-            self.cloud_vaos.append(cloud_vao)
-
-            cloud           = Model(
-                vao                 = cloud_vao, 
-                position            = glm.vec3(*rand_pos_xy[i], rand_pos_z[i]),
-                scale               = glm.vec3(utils.parse_list(configs["cloud_scale"], float)),
-                texture_path        = configs.get("cloud_tex_black")
-            )
-            self.clouds.append(cloud)
-
+        self.logic          = GameLogic(configs)
 
         # 0: points, 1: wireframe, 2: textured
         self.render_mode    = 2     
 
-        # App Timer
+        # App Timers
         self.timer          = QTimer(self)
-        self.timer.timeout.connect(self.update_game)
+        self.timer.timeout.connect(self.update_logic)
         self.timer.start(1000 // configs.getint("app_fps"))
         self.elapsed_timer  = QElapsedTimer()
         self.elapsed_timer.start()
 
-        self.cam.pivot_point = self.air_plane.position
+        self._fps           = 0
+        self.fps_timer      = QTimer(self)
+        self.fps_timer.timeout.connect(self._print_fps)
+        self.fps_timer.start(1000)
 
 
-    def update_game(self):
+    # === Private GL Helper Methods ===
 
-        ms = self.elapsed_timer.elapsed()
-        self.elapsed_timer.restart()
-
-        delta = ms / 1000.0  # Convert to seconds
-
-        if self._flight_started:
-            self.air_plane.update(delta)
-
-        for enemy in self.enemies:
-            enemy.update(delta)
-
-        for target in self.targets:
-            target.update()
-
-        for rocket in self.rockets:
-            rocket.update()
-            if rocket.is_expired():
-                self.rockets.remove(rocket)
-
-        for strip in self.strips:
-            strip.update()
-            if strip.is_expired():
-                self.strips.remove(strip)
-
-        self.add_strip()
-       
-        self.cam.pivot_point = self.air_plane.position
-
-        v1          = glm.vec2(0, 1)
-        plane_forw  = self.air_plane.forward
-        v2          = glm.vec2(plane_forw.x, plane_forw.y)
-        angle_rad   = utils.signed_angle_2d(v1, v2)
-        angle_off   = glm.degrees(angle_rad - self.cam.orbit_rad)        
-        self.cam.add_orbit(angle_off)
-
-        if self.mission.check_distance((self.air_plane.position.x, self.air_plane.position.y)):
-            self.mission = self.mission_manager.new_mission()
-            print("New Mission: Reach '{}, {}'".format(self.mission.target.name, self.mission.target.country))
-
-        self.update()
+    def _print_fps(self):
+        print("FPS: {}".format(self._fps))
+        #self.fps_timer.start(1000)
+        self._fps = 0
 
 
-    def initializeGL(self):
+    def _setup_initial_rendering(self):
         bg_color = utils.parse_list(self.configs["clear_color"], float)
         glClearColor(*bg_color)
         glClearDepth(1.0)
-        glEnable(GL_CULL_FACE)
-        glDepthMask(GL_FALSE)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glPointSize(self.configs.getfloat("point_size"))
 
-        self.air_plane_vao.initializeGL()
-        self.air_plane.initializeGL()
-        
-        self.tile_vao.initializeGL()
 
-        self.target_vao.initializeGL()
-
-        for target in self.targets:
-            target.initializeGL()
-
-        for cloud in self.cloud_vaos:
-            cloud.initializeGL()
-        
-        for cloud in self.clouds:
-            cloud.initializeGL()
-
-        for enemy in self.enemies:
-            enemy.initializeGL()
-
-        self.setup_shaders()
-
-        # Get uniform location
-        self.model_loc  = self.program.get_uniform_location("model")
-        self.view_loc   = self.program.get_uniform_location("view")
-        self.proj_loc   = self.program.get_uniform_location("projection")
-        self.alpha_loc  = self.program.get_uniform_location("alpha")
-
-
-
-    def setup_shaders(self):
+    def _setup_shaders(self):
         vertex_shader   = Shader("shaders/vertex_shader.glsl", GL_VERTEX_SHADER)
         fragment_shader = Shader("shaders/fragment_shader.glsl", GL_FRAGMENT_SHADER)
         self.program    = Program(vertex_shader, fragment_shader)
 
 
-    def shoot_rocket(self):
-        
-        rocket          = Rocket(
-            vao                 = self.tile_vao, 
-            position            = glm.vec3(*self.air_plane.position),
-            scale               = self.configs.getfloat("plane_scale"),
-            texture_path        = self.configs.get("rocket_tex_path"), 
-            forward             = self.air_plane.forward, 
-            rocket_speed        = self.configs.getfloat("rocket_speed"),
-            life_time           = self.configs.getint("rocket_life_time")
-        )
-        rocket.orientation = self.air_plane.orientation
-        
-        rocket.initializeGL()
+    def _setup_render_step(self):
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glPolygonMode(GL_FRONT_AND_BACK, RENDER_MODES[self.render_mode])
+        glEnable(GL_DEPTH_TEST)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-        self.rockets.append(rocket)
+        # Set Uniform attributes that are not changed in rendering loop
+        glUniformMatrix4fv(self._uniform_locations["view"], 1, GL_FALSE, self.logic.camera.view_matrix.to_bytes())
+        glUniformMatrix4fv(self._uniform_locations["projection"], 1, GL_FALSE, self.logic.camera.projection_matrix.to_bytes())
+        glUniform1f(self._uniform_locations["alpha"], 1.0)
 
 
-    def add_strip(self):
-        
-        strip           = Strip(
-            vao                 = self.tile_vao, 
-            position            = glm.vec3(*self.air_plane.position),
-            scale               = self.configs.getfloat("plane_scale"),
-            texture_path        = self.configs.get("strip_tex_path"), 
-            life_time           = self.configs.getint("strip_life_time")
-        )
-        strip.orientation = self.air_plane.orientation
+    def _enable_opaque_rendering(self):
+        glDisable(GL_BLEND)
+        glDepthMask(GL_TRUE)
+        glEnable(GL_CULL_FACE)
 
-        
-        strip.initializeGL()
 
-        self.strips.append(strip)
+    def _enable_transparent_rendering_cull(self):
+        glEnable(GL_BLEND)
+        glDepthMask(GL_FALSE)  # Don't write to depth, but still use it
+        glEnable(GL_CULL_FACE)
+
+
+    def _enable_transparent_rendering_no_cull(self):
+        glEnable(GL_BLEND)
+        glDepthMask(GL_FALSE)  # Don't write to depth, but still use it
+        glDisable(GL_CULL_FACE)
+
+
+    # === Private Key Interaction Methods ===
+
+    def _zoom(self, direction: int):
+        """
+        Zoom in or out based on direction.
+        :param direction: -1 for zoom in, +1 for zoom out
+        """
+        zoom_factor = self.configs.getfloat("cam_zoom_factor")  
+        min_dist    = self.configs.getfloat("cam_zoom_min")
+
+        if direction < 0:
+            # Zoom in (move closer): reduce distance
+            self.logic.camera.distance *= (1 - zoom_factor)
+            self.logic.camera.distance = max(self.logic.camera.distance, min_dist)
+        elif direction > 0:
+            # Zoom out (move further): increase distance
+            self.logic.camera.distance *= (1 + zoom_factor)
+
+
+    # === Public Methods ===
+
+    def update_logic(self):
+        delta      = self.elapsed_timer.elapsed() / 1000.0
+        self.elapsed_timer.restart()
+        self.logic.update(delta)    # Trigger Logic
+        self.update()               # Trigger UI
+        self._fps += 1
+
+
+    def initializeGL(self):
+        self._setup_initial_rendering()
+        self._setup_shaders()
+
+        # Get uniform location
+        uniform_names       = ["model", "view", "projection", "alpha"]
+        uniform_locations   = {name: self.program.get_uniform_location(name) for name in uniform_names}
+        self._uniform_locations = uniform_locations
+
+        # Initialize models and link uniform locations
+        self.logic.initializeGL(uniform_locations)
 
 
     def paintGL(self):
-        
-        # Setup Rendering
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)  
         self.program.use()
-        if self.render_mode == 0:
-            glPolygonMode(GL_FRONT_AND_BACK, GL_POINT)
-        elif self.render_mode == 1:
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-        else:
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-
-        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.cam.view_matrix.to_bytes())
-        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.cam.projection_matrix.to_bytes())
-        glUniform1f(self.alpha_loc, 1.0)
-        
+        self._setup_render_step()    
 
         # === Stage 1: Render opaque objects ===
-        glEnable(GL_DEPTH_TEST)
-        glDepthMask(GL_TRUE)  # Write to depth buffer
-        glDisable(GL_BLEND)
-        glEnable(GL_CULL_FACE)
+        self._enable_opaque_rendering()
 
-        # = Tiles =
+        # Load required Map Tiles
+        self.logic.map_tile_check()
 
-        # Add missing tiles
-        tile_ids = self.frustum.cull(self.cam.projection_matrix * self.cam.view_matrix, self.cam.cam_pos)
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            for (x, y, z) in tile_ids:
-                if (x, y, z) not in self.tile_cache:
-                    futures.append(executor.submit(MapTile.prepare_tile, x, y, z, self.tile_vao))
-
-            for future in futures:
-                x, y, z, tile = future.result()
-                self.tile_cache[(x, y, z)] = tile
-                tile.initializeGL()
-
-        # Remove tiles no longer visible
-        for key in list(self.tile_cache.keys()):
-            if not key in tile_ids:
-                self.tile_cache[key].release
-                self.tile_cache.pop(key)
-
-        # Render tiles
-        for tile in self.tile_cache.values():
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, tile.model_matrix.to_bytes())
-            tile.render()
-
-        # = Plane =
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.air_plane.model_matrix.to_bytes())
-        self.air_plane.render()
-
-        # = Enemies =
-        for enemy in self.enemies:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, enemy.model_matrix.to_bytes())
-            enemy.render()
-       
+        for obj in [self.logic.air_plane] + self.logic.enemies + self.logic.tiles:
+            obj.render()      
 
         # === Stage 2: Render Semi-Transparent objects ===
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glDepthMask(GL_FALSE)  # Don't write to depth, but still use it
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_CULL_FACE)
-
-        # = Clouds =
-        for cloud in self.clouds:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, cloud.model_matrix.to_bytes())
-            cloud.render()
-
-        glm.mat4.to_bytes
-
-        # = Targets =
-        for target in self.targets:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, target.model_matrix.to_bytes())
-            target.render()
-
+        self._enable_transparent_rendering_cull()
+        for obj in self.logic.bl_clouds + self.logic.wh_clouds + self.logic.targets:
+            obj.render()
 
         # === Stage 3: Render Semi-Transparent objects without face culling ===
-        glDisable(GL_CULL_FACE)
-
-        # = Rockets =
-        for rocket in self.rockets:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, rocket.model_matrix.to_bytes())
-            rocket.render()
-
-        # = Strips =
-        for strip in self.strips:
-            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, strip.model_matrix.to_bytes())
-            strip.render()
-
-        glEnable(GL_CULL_FACE)
-
+        self._enable_transparent_rendering_no_cull()
+        for obj in self.logic.rockets + self.logic.strips:
+            obj.render()
 
         # === Stage 4: Render Overlays ===
-
-        # = Target Airport Desciption =
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         painter.setPen(QColor(255, 120, 128))
         painter.setFont(QFont("Arial", 30))
-        text    = "Reach '{}, {}'".format(self.mission.target.name, self.mission.target.country)
+        text    = "Reach '{}, {}'".format(self.logic.mission.target.name, self.logic.mission.target.country)
         width   = painter.fontMetrics().horizontalAdvance(text)
         x_pos   = configs.getint("window_width") // 2 - width // 2
         y_pos   = configs.getint("window_height") - 20
@@ -387,117 +173,92 @@ class GLWidget(QOpenGLWidget):
         painter.end()
         
 
-
-    def resizeGL(self, w, h):
+    def resizeGL(self, w: int, h: int):
         glViewport(0, 0, w, h)
-        self.cam.aspect = w/h
+        self.logic.camera.aspect = w/h
 
 
     def release(self):
-        self.air_plane.release()
-        for tile in self.tile_cache.values():
-            tile.release()
         self.program.release()
+        self.logic.release()
 
 
-    def delegate_key_released(self, event):
-        key = event.key()
-        if key == Qt.Key.Key_W:
-            self.air_plane.accelerate(0)
-        elif key == Qt.Key.Key_S:
-            self.air_plane.accelerate(0)
-        elif key == Qt.Key.Key_Shift:
-            self.air_plane.accelerate(0)
+    def delegate_key_released(self, key: Qt.Key):
+        if key in [Qt.Key.Key_W, Qt.Key.Key_S, Qt.Key.Key_Shift]:
+            self.logic.air_plane.accelerate(0)
 
 
-    def delegate_key_pressed(self, event):
-        key = event.key()
-        if key == Qt.Key.Key_W:
-            if not self._flight_started:
-                self._flight_started = True
-            self.air_plane.accelerate(self.configs.getfloat("plane_gas_acc"))
-        elif key == Qt.Key.Key_S:
-            self.air_plane.accelerate(self.configs.getfloat("plane_brake_acc"))
-        elif key == Qt.Key.Key_Shift:
-            self.air_plane.accelerate(self.configs.getfloat("plane_nitro_acc"))
-        elif key == Qt.Key.Key_A:
-            self.air_plane.add_yaw(2)
-        elif key == Qt.Key.Key_D:
-            self.air_plane.add_yaw(-2)
-        elif key == Qt.Key.Key_1:
-            self.render_mode = 0
-        elif key == Qt.Key.Key_2:
-            self.render_mode = 1
-        elif key == Qt.Key.Key_3:
-            self.render_mode = 2
-        elif key == Qt.Key.Key_Space:
-            self.shoot_rocket()
-        elif key == Qt.Key.Key_PageUp:
-            self.cam.add_tilt(-5)
-        elif key == Qt.Key.Key_PageDown:
-            self.cam.add_tilt(5)
-        elif key == Qt.Key.Key_Plus:
-            new_cam_dist = self.cam.distance - self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
-            self.cam.distance = new_cam_dist
-        elif key == Qt.Key.Key_Minus:
-            new_cam_dist = self.cam.distance + self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
-            self.cam.distance = new_cam_dist
-        elif key == Qt.Key.Key_Right:
-            self.air_plane.add_roll(2)
-        elif key == Qt.Key.Key_Left:
-            self.air_plane.add_roll(-2)
-        elif key == Qt.Key.Key_Down:
-            self.air_plane.add_pitch(2)
-        elif key == Qt.Key.Key_Up:
-            self.air_plane.add_pitch(-2)
+    def delegate_key_pressed(self, key: Qt.Key):
+        key_actions = {
+            # Airplane Controlls
+            Qt.Key.Key_W:           lambda: self.logic.air_plane.accelerate(self.configs.getfloat("plane_gas_acc")),
+            Qt.Key.Key_S:           lambda: self.logic.air_plane.accelerate(self.configs.getfloat("plane_brake_acc")),
+            Qt.Key.Key_A:           lambda: self.logic.air_plane.add_yaw(self.configs.getfloat("plane_yaw_offset")),
+            Qt.Key.Key_D:           lambda: self.logic.air_plane.add_yaw(-self.configs.getfloat("plane_yaw_offset")),
+            Qt.Key.Key_Shift:       lambda: self.logic.air_plane.accelerate(self.configs.getfloat("plane_nitro_acc")),
+            Qt.Key.Key_Up:          lambda: self.logic.air_plane.add_pitch(-self.configs.getfloat("plane_pitch_offset")),
+            Qt.Key.Key_Down:        lambda: self.logic.air_plane.add_pitch(self.configs.getfloat("plane_pitch_offset")),
+            Qt.Key.Key_Left:        lambda: self.logic.air_plane.add_roll(-self.configs.getfloat("plane_roll_offset")),
+            Qt.Key.Key_Right:       lambda: self.logic.air_plane.add_roll(self.configs.getfloat("plane_roll_offset")),
+            Qt.Key.Key_Space:       lambda: self.logic.add_rocket(),
+
+            # Camera Controlls
+            Qt.Key.Key_PageUp:      lambda: self.logic.camera.add_tilt(-self.configs.getfloat("cam_tilt_offset")),
+            Qt.Key.Key_PageDown:    lambda: self.logic.camera.add_tilt(self.configs.getfloat("cam_tilt_offset")),
+            Qt.Key.Key_Plus:        lambda: self._zoom(1),
+            Qt.Key.Key_Minus:       lambda: self._zoom(-1),
+
+            # Render Controlls
+            Qt.Key.Key_1:           lambda: setattr(self, "render_mode", 0),
+            Qt.Key.Key_2:           lambda: setattr(self, "render_mode", 1),
+            Qt.Key.Key_3:           lambda: setattr(self, "render_mode", 2),
+        }
+
+        action = key_actions.get(key)
+        if action:
+            action()
+
+        if key in [Qt.Key.Key_W, Qt.Key.Key_Shift]:
+            if not self.logic.in_air:
+                self.logic.in_air = True
 
 
     def delegate_wheel_event(self, event):
-
-        sensitivity         = configs.getfloat("wheel_sensitivity")
-        delta               = -event.angleDelta().y() / 120 * sensitivity# One step = 120
-        self.cam.distance   = self.cam.distance + delta * self.configs.getfloat("cam_zoom_factor") * self.cam.distance + self.configs.getfloat("cam_zoom_min")
+        self._zoom(-1 if event.angleDelta().y() > 0 else 1)
 
 
-    def delegate_mouse_pressed_event(self, event):
-        pass
-
-    def delegate_mouse_released_event(self, event):
-        pass
-
-
-    def screen_ray(self, pos):
-        x, y = pos.x(), pos.y()
-        view = self.cam.view_matrix
-        proj = self.cam.projection_matrix
-        width, height = self.width(), self.height()
+    def screen_ray(self, pos) -> Tuple[glm.vec3, glm.vec3]:
+        x, y            = pos.x(), pos.y()
+        view            = self.logic.camera.view_matrix
+        proj            = self.logic.camera.projection_matrix
+        width, height   = self.width(), self.height()
 
         # Convert to NDC
-        x_ndc = (2.0 * x) / width - 1.0
-        y_ndc = 1.0 - (2.0 * y) / height
+        x_ndc           = (2.0 * x) / width - 1.0
+        y_ndc           = 1.0 - (2.0 * y) / height
 
         # Near and far points in view space
-        near_point = glm.vec4(x_ndc, y_ndc, -1.0, 1.0)
-        far_point  = glm.vec4(x_ndc, y_ndc,  1.0, 1.0)
+        near_point      = glm.vec4(x_ndc, y_ndc, -1.0, 1.0)
+        far_point       = glm.vec4(x_ndc, y_ndc,  1.0, 1.0)
 
-        inv_projview = glm.inverse(proj * view)
-        p_near = inv_projview * near_point
-        p_far  = inv_projview * far_point
-        p_near /= p_near.w
-        p_far  /= p_far.w
+        inv_projview    = glm.inverse(proj * view)
+        p_near          = inv_projview * near_point
+        p_far           = inv_projview * far_point
+        p_near          /= p_near.w
+        p_far           /= p_far.w
 
         return glm.vec3(p_near), glm.vec3(p_far)
 
 
-    def delegate_tilt(self, orbit_center, start_pos, end_pos):
+    def delegate_tilt(self, start_pos, end_pos):
 
-        dx = end_pos.x() - start_pos.x()
+        #dx = end_pos.x() - start_pos.x()
         dy = end_pos.y() - start_pos.y()
 
         sensitivity = 0.1
         
-        self.cam.add_tilt(dy * sensitivity)
-        self.cam.add_orbit(dx * sensitivity)
+        self.logic.camera.add_tilt(dy * sensitivity)
+        #self.logic.camera.add_orbit(dx * sensitivity)
 
 
 
@@ -518,17 +279,16 @@ class MainWindow(QMainWindow):
         self.last_mouse_pos     = None
         self.left_mouse_down    = False
         self.middle_mouse_down  = False
-        self.orbit_center       = None
 
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
-            self.gl_widget.release()
             self.close()
-        self.gl_widget.delegate_key_pressed(event)
+        self.gl_widget.delegate_key_pressed(event.key())
+
 
     def keyReleaseEvent(self, event):
-        self.gl_widget.delegate_key_released(event)
+        self.gl_widget.delegate_key_released(event.key())
 
 
     def wheelEvent(self, event):
@@ -541,14 +301,11 @@ class MainWindow(QMainWindow):
 
 
     def mousePressEvent(self, event):
+        self.last_mouse_pos     = event.position()
         if event.button() == Qt.MouseButton.LeftButton:
             self.left_mouse_down    = True
-            self.last_mouse_pos     = event.position()
         elif event.button() == Qt.MouseButton.MiddleButton:
             self.middle_mouse_down  = True
-            self.last_mouse_pos     = event.position()
-            ray_origin, ray_dir     = self.gl_widget.screen_ray(event.position())
-            self.orbit_center       = self.intersect_plane(ray_origin, ray_dir, plane_z=0.0)
 
 
     def mouseReleaseEvent(self, event):
@@ -564,8 +321,12 @@ class MainWindow(QMainWindow):
             pass
         elif self.middle_mouse_down:
             new_pos = event.position()
-            self.gl_widget.delegate_tilt(self.orbit_center, self.last_mouse_pos, new_pos)
+            self.gl_widget.delegate_tilt(self.last_mouse_pos, new_pos)
             self.last_mouse_pos = new_pos
+
+
+    def closeEvent(self, event):
+        self.gl_widget.release()
 
 
 

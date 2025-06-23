@@ -1,7 +1,8 @@
 from engine.vao import VAO
 from engine.texture import Texture
 from pyglm import glm
-from typing import Any
+from typing import Any, Dict
+from OpenGL.GL import *
 
 
 # Camera Systemr relative to plane
@@ -106,23 +107,31 @@ class Model:
         self._update_model_matrix()
 
 
-    def update(self):
-        print("Nothing to update")
+    def update(self, delta: float):
         pass
 
 
-    def initializeGL(self):
+    def initializeGL(self, uniform_locations: Dict):
         self._texture.initializeGL()
+        self._uniform_locations = uniform_locations
+
+        if not self._vao.initialized:
+            self._vao.initializeGL()
 
 
     def render(self):
+        
+        # Every model has at least a model matrix
+        glUniformMatrix4fv(self._uniform_locations["model"], 1, GL_FALSE, self._model_matrix.to_bytes())
+
         self._texture.use()
         self._vao.use()
         self._vao.render()
 
 
-    def release(self):
-        self._vao.release()
+    def release(self, keep_vao: bool = False):
+        if not keep_vao:
+            self._vao.release()
         self._texture.release()
 
     
@@ -141,9 +150,10 @@ class Target(Model):
         self._rotation_speed     = rotation_speed
 
 
-    def update(self):
-        self.add_yaw(self._rotation_speed)
+    def update(self, delta: float):
+        self.add_yaw(self._rotation_speed * delta)
         self._update_model_matrix()
+        super().update(delta)
 
 
 
@@ -162,6 +172,11 @@ class Airplane(Model):
     @property
     def forward(self) -> glm.vec3:
         return glm.normalize(glm.vec3(self._model_matrix[1]))
+    
+
+    @property
+    def velocity(self) -> float:
+        return self._velocity
 
 
     def accelerate(self, acceleration: float):
@@ -183,6 +198,7 @@ class Airplane(Model):
             self._position.z = 0
 
         self._update_model_matrix()
+        super().update(delta)
 
 
 
@@ -195,9 +211,10 @@ class ExpirableModel(Model):
         self._no_updates: int = 0
 
 
-    def update(self):
+    def update(self, delta: float):
         self._no_updates    += 1
         self._update_model_matrix()
+        super().update(delta)
 
 
     def is_expired(self) -> bool:
@@ -213,9 +230,9 @@ class Rocket(ExpirableModel):
         self._forward       = forward
         
 
-    def update(self):
-        self._position      += self._forward * self._rocket_speed
-        super().update()
+    def update(self, delta: float):
+        self._position      += self._forward * self._rocket_speed * delta
+        super().update(delta)
 
 
 
