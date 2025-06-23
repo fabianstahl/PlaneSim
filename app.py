@@ -48,7 +48,6 @@ class GLWidget(QOpenGLWidget):
 
     def _print_fps(self):
         print("FPS: {}".format(self._fps))
-        #self.fps_timer.start(1000)
         self._fps = 0
 
 
@@ -205,8 +204,8 @@ class GLWidget(QOpenGLWidget):
             # Camera Controlls
             Qt.Key.Key_PageUp:      lambda: self.logic.camera.add_tilt(-self.configs.getfloat("cam_tilt_offset")),
             Qt.Key.Key_PageDown:    lambda: self.logic.camera.add_tilt(self.configs.getfloat("cam_tilt_offset")),
-            Qt.Key.Key_Plus:        lambda: self._zoom(1),
-            Qt.Key.Key_Minus:       lambda: self._zoom(-1),
+            Qt.Key.Key_Plus:        lambda: self._zoom(-1),
+            Qt.Key.Key_Minus:       lambda: self._zoom(1),
 
             # Render Controlls
             Qt.Key.Key_1:           lambda: setattr(self, "render_mode", 0),
@@ -275,29 +274,40 @@ class MainWindow(QMainWindow):
         self.gl_widget = GLWidget(configs)
         self.setCentralWidget(self.gl_widget)
 
+        # When a pressed key is considered held is OS dependent. Avoid this break by start as soon as a key is pressed.
+        self.keys_held          = set()
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._process_held_keys)
+        print(1000 // self.configs.getfloat("app_fps"))
+        self.timer.start(1000 // self.configs.getint("app_fps"))
+
         # Variables for user interaction
         self.last_mouse_pos     = None
         self.left_mouse_down    = False
         self.middle_mouse_down  = False
 
 
+    def _process_held_keys(self):
+        for key in self.keys_held:
+            self.gl_widget.delegate_key_pressed(key)
+
+
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Escape:
+        key = event.key()
+        if key == Qt.Key.Key_Escape:
             self.close()
-        self.gl_widget.delegate_key_pressed(event.key())
+        self.keys_held.add(key)
 
 
     def keyReleaseEvent(self, event):
-        self.gl_widget.delegate_key_released(event.key())
+        key = event.key()
+        if key in self.keys_held:
+            self.keys_held.remove(key)
+            self.gl_widget.delegate_key_released(key)
 
 
     def wheelEvent(self, event):
         self.gl_widget.delegate_wheel_event(event)
-
-
-    def intersect_plane(self, ray_origin, ray_dir, plane_z=0.0):
-        t = (plane_z - ray_origin.z) / ray_dir.z
-        return ray_origin + t * ray_dir
 
 
     def mousePressEvent(self, event):
